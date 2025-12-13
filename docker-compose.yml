@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  dc-projects:
+    build: .
+    container_name: dc-projects-app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_APP=app.py
+      - DC_SECRET_KEY=your_secure_secret_key_here
+    volumes:
+      - ./data:/app/data
+      - ./templates:/app/templates
+    restart: unless-stopped
+    networks:
+      - dc-network
+
+  # Optional: Add nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: dc-projects-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - dc-projects
+    networks:
+      - dc-network
+    restart: unless-stopped
+
+networks:
+  dc-network:
+    driver: bridge

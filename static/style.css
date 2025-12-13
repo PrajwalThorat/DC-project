@@ -1,0 +1,44 @@
+/* static/style.css - DC Projects simple theme */
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #0e1220;
+  color: #e8eaf6;
+  margin:0;
+  padding:8px;
+}
+.topbar {
+  display:flex; justify-content:space-between; align-items:center;
+  background:#14182b; padding:6px 10px; border-radius:6px; border:1px solid #22263a;
+}
+.controls { margin:8px 0; display:flex; gap:8px; flex-wrap:wrap; }
+.legend-controls { margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.legend-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.legend-item { padding:6px 8px; border-radius:6px; background:#11141f; cursor:pointer; border:1px solid #262b3f; }
+.pill { width:14px; height:14px; display:inline-block; border-radius:3px; margin-right:6px; }
+.status-not-started { background:#12172c; }
+.status-omit-started { background:#8b0000; }
+.status-in-progress { background:#fff3b0; }
+.status-on-hold { background:#6b4423; }
+.status-kickback { background:#b35700; }
+.status-review { background:#a5c9ff; }
+.status-approved { background:#c8f7c5; }
+.status-final { background:#1b5e20; }
+
+.layout { display:grid; grid-template-columns:220px 1fr; gap:10px; height:calc(100vh - 160px); }
+.panel { background:#0f1426; padding:8px; border-radius:8px; border:1px solid #1f253a; overflow:auto; }
+.inline-form input, .inline-form select, .inline-form button { padding:6px 8px; border-radius:6px; border:1px solid #2b3250; background:#1b2238; color:#e8eaf6; }
+.shots-table-wrap { background:#0f1426; border-radius:6px; padding:6px; overflow:auto; }
+#shotTable { width:100%; border-collapse:collapse; min-width:900px; }
+#shotTable th, #shotTable td { padding:8px; border:1px solid #252c45; text-overflow:ellipsis; white-space:nowrap; overflow:hidden; }
+.project-logo { width:100%; max-height:80px; object-fit:contain; margin-bottom:6px; }
+.comments-panel { margin-top:10px; background:#0c0f18; padding:8px; border-radius:6px; }
+.hidden { display:none; }
+
+/* login */
+.login-page { display:flex; align-items:center; justify-content:center; height:100vh; background:#0e1220; }
+.login-box { background:#14182b; padding:24px; border-radius:8px; width:320px; border:1px solid #22263a; text-align:center; }
+.login-box input { width:100%; padding:8px; margin-bottom:8px; border-radius:6px; border:1px solid #2b3250; background:#0f1324; color:#fff; }
+
+/* small helpers */
+.action-btn { padding:6px 8px; margin-right:6px; border-radius:6px; }
+.col-resize-handle { display:inline-block; width:8px; height:18px; vertical-align:middle; margin-left:6px; cursor:col-resize; opacity:0.5; }

@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>DC Projects - Updated</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #0a0e27;
+        color: #eee;
+      }
+      .navbar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+      .navbar h1 {
+        font-size: 20px;
+        font-weight: bold;
+      }
+      .navbar button {
+        padding: 6px 12px;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 1px solid white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .navbar button:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .container {
+        display: flex;
+        height: calc(100vh - 50px);
+        gap: 0;
+      }
+
+      .panel-menu {
+        width: 200px;
+        background: linear-gradient(180deg, #0f2d45 0%, #0a1f35 100%);
+        border-right: 1px solid #1a3a52;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        transition: width 0.3s ease;
+      }
+      .panel-menu.collapsed {
+        width: 60px;
+      }
+      .menu-section {
+        padding: 20px 0;
+        border-bottom: 1px solid #1a3a52;
+      }
+      .menu-section:first-child {
+        border-top: 1px solid #1a3a52;
+      }
+      .menu-title {
+        font-size: 10px;
+        color: #667eea;
+        text-transform: uppercase;
+        padding: 0 15px 12px 15px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        display: none;
+      }
+      .panel-menu:not(.collapsed) .menu-title {
+        display: block;
+      }
+      .menu-btn {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 12px 15px;
+        background: none;
+        border: none;
+        color: #aaa;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 0.2s;
+        border-left: 3px solid transparent;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .panel-menu.collapsed .menu-btn {
+        padding: 12px 10px;
+        text-align: center;
+        font-size: 16px;
+        width: auto;
+        white-space: normal;
+      }
+      .panel-menu.collapsed .menu-btn span {
+        display: none;
+      }
+      .panel-menu.collapsed .menu-btn::before {
+        content: attr(data-icon);
+      }
+      .menu-btn:hover {
+        background: rgba(102, 126, 234, 0.1);
+        color: #667eea;
+        border-left-color: #667eea;
+      }
+      .panel-menu.collapsed .menu-btn:hover {
+        border-left-color: transparent;
+        background: rgba(102, 126, 234, 0.2);
+      }
+      .menu-btn.active {
+        background: rgba(102, 126, 234, 0.15);
+        color: #667eea;
+        border-left-color: #667eea;
+        font-weight: 600;
+      }
+      .panel-menu.collapsed .menu-btn.active {
+        border-left-color: transparent;
+        background: rgba(102, 126, 234, 0.3);
+      }
+      .menu-toggle {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 12px;
+        background: rgba(102, 126, 234, 0.1);
+        border-bottom: 1px solid #1a3a52;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .menu-toggle:hover {
+        background: rgba(102, 126, 234, 0.2);
+      }
+      .menu-toggle-icon {
+        font-size: 16px;
+        color: #667eea;
+      }
+
+      .container {
+        display: flex;
+        height: calc(100vh - 50px);
+        gap: 0;
+      }
+
+      .panel-projects {
+        width: 280px;
+        background: #16213e;
+        border-right: 1px solid #333;
+        overflow-y: auto;
+        padding: 15px;
+      }
+      .panel-projects h3 {
+        font-size: 13px;
+        color: #667eea;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .btn-add {
+        background: #667eea;
+        color: white;
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .btn-add:hover {
+        background: #764ba2;
+      }
+      .projects-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .project-card {
+        padding: 12px;
+        background: #0f3460;
+        border: 1px solid #1a5a7a;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .project-card:hover {
+        background: #1a4d6d;
+        border-color: #667eea;
+        box-shadow: 0 0 8px rgba(102, 126, 234, 0.2);
+      }
+      .project-card.active {
+        background: #1e5a7a;
+        border-color: #667eea;
+        box-shadow: 0 0 12px rgba(102, 126, 234, 0.4);
+      }
+      .project-card-name {
+        font-weight: bold;
+        color: #667eea;
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      .project-card-meta {
+        font-size: 10px;
+        color: #999;
+        line-height: 1.4;
+      }
+      .project-card-meta span {
+        display: block;
+        margin-bottom: 2px;
+      }
+
+      .panel-shots {
+        width: 450px;
+        background: #0f3460;
+        overflow-y: auto;
+        padding: 15px;
+        border-right: 1px solid #333;
+        display: flex;
+        flex-direction: column;
+      }
+      .panel-shots h3 {
+        font-size: 13px;
+        color: #667eea;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+      .shots-controls {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .shots-controls button {
+        padding: 5px 10px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .shots-controls button:hover {
+        background: #764ba2;
+      }
+      .shots-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      .shots-table th {
+        background: #0a1f35;
+        color: #667eea;
+        padding: 6px;
+        text-align: left;
+        border-bottom: 1px solid #333;
+        font-weight: bold;
+      }
+      .shots-table td {
+        padding: 6px;
+        border-bottom: 1px solid #1a3a52;
+      }
+      .shots-table tbody tr {
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .shots-table tbody tr:hover {
+        background: #1a3a52;
+      }
+      .shots-table tbody tr.active {
+        background: #2a5a7d;
+      }
+
+      .panel-details {
+        flex: 1;
+        background: #16213e;
+        border-left: 1px solid #333;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        overflow: hidden;
+      }
+      
+      .shot-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        border-right: 1px solid #333;
+        min-height: 0;
+      }
+      
+      .shot-topbar {
+        padding: 12px;
+        display: none;
+        gap: 12px;
+        align-items: center;
+        border-bottom: 1px solid #2a3a4d;
+        background: linear-gradient(
+          180deg,
+          rgba(15, 52, 96, 0.04),
+          transparent
+        );
+        flex-shrink: 0;
+      }
+      .shot-topbar.show {
+        display: flex;
+      }
+      .shot-topbar .left {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex: 1;
+        flex-wrap: wrap;
+      }
+      .shot-topbar label {
+        font-size: 12px;
+        color: #9fb6ff;
+        margin-right: 6px;
+      }
+      .shot-topbar select {
+        background: #0f3460;
+        color: #eee;
+        border: 1px solid #24384f;
+        padding: 6px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .shot-details {
+        padding: 12px;
+        background: #0f3460;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+      }
+      .shot-details h4 {
+        color: #667eea;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+      .shot-meta {
+        font-size: 11px;
+        color: #aaa;
+        line-height: 1.5;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+      .shot-meta strong {
+        color: #667eea;
+      }
+      .shot-meta div {
+        margin-bottom: 0px;
+      }
+
+      .details-actions {
+        padding: 10px;
+        display: none;
+        gap: 6px;
+        border-bottom: 1px solid #333;
+        flex-shrink: 0;
+      }
+      .details-actions button {
+        padding: 4px 8px;
+        font-size: 10px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      .btn-edit {
+        background: #667eea;
+        color: white;
+      }
+      .btn-delete {
+        background: #e74c3c;
+        color: white;
+      }
+
+      .preview-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-right: 1px solid #333;
+        min-height: 0;
+      }
+
+      .video-wrap {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        flex: 1;
+        padding: 12px;
+        background: #0f3460;
+        overflow-y: auto;
+        min-height: 0;
+      }
+      .preview-buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        flex-shrink: 0;
+      }
+      .preview-btn {
+        padding: 6px 10px;
+        background: #1a3a52;
+        color: #9fb6ff;
+        border: 1px solid #24384f;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: bold;
+        transition: all 0.2s;
+      }
+      .preview-btn:hover {
+        background: #24384f;
+        border-color: #667eea;
+      }
+      .preview-btn.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+      .preview-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .player {
+        background: #0a1f35;
+        border-radius: 8px;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #666;
+        font-size: 13px;
+        border: 1px solid #24384f;
+        overflow: hidden;
+        width: 100%;
+        min-height: 0;
+      }
+      .player img,
+      .player video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .player-text {
+        padding: 15px;
+        text-align: center;
+        font-size: 12px;
+        color: #999;
+        word-break: break-all;
+      }
+
+      .comments-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+      }
+      .comments-header {
+        padding: 10px 12px;
+        background: #0f3460;
+        color: #667eea;
+        font-size: 11px;
+        text-transform: uppercase;
+        border-bottom: 1px solid #333;
+        font-weight: bold;
+        flex-shrink: 0;
+      }
+      .comments-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+        background: #16213e;
+      }
+      .comment-item {
+        margin-bottom: 10px;
+        padding: 8px;
+        background: #0a1f35;
+        border-left: 3px solid #667eea;
+        border-radius: 3px;
+      }
+      .comment-author {
+        color: #667eea;
+        font-weight: bold;
+        font-size: 11px;
+      }
+      .comment-time {
+        color: #666;
+        font-size: 10px;
+      }
+      .comment-text {
+        color: #ccc;
+        font-size: 11px;
+        margin-top: 4px;
+        line-height: 1.3;
+      }
+      .comment-input {
+        padding: 10px 12px;
+        background: #0f3460;
+        border-top: 1px solid #333;
+        flex-shrink: 0;
+      }
+      .comment-input textarea {
+        width: 100%;
+        padding: 6px;
+        background: #1a2f45;
+        color: #eee;
+        border: 1px solid #333;
+        border-radius: 3px;
+        font-size: 11px;
+        resize: none;
+        height: 50px;
+        font-family: inherit;
+      }
+      .comment-input button {
+        width: 100%;
+        padding: 5px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 11px;
+        margin-top: 6px;
+        font-weight: bold;
+      }
+
+      .empty-state {
+        padding: 30px 15px;
+        text-align: center;
+        color: #666;
+        font-size: 12px;
+      }
+
+      /* Users View */
+      .users-view {
+        display: none;
+        flex: 1;
+        background: #16213e;
+        overflow-y: auto;
+      }
+      .users-view.show {
+        display: flex;
+        flex-direction: column;
+      }
+      .users-header {
+        padding: 15px;
+        border-bottom: 1px solid #333;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .users-header h3 {
+        font-size: 13px;
+        color: #667eea;
+        text-transform: uppercase;
+      }
+      .users-list {
+        padding: 15px;
+      }
+      .user-row {
+        padding: 12px;
+        background: #0f3460;
+        border: 1px solid #1a5a7a;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .user-info h4 {
+        color: #667eea;
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      .user-info p {
+        font-size: 10px;
+        color: #999;
+      }
+      .user-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .user-actions button {
+        padding: 4px 8px;
+        font-size: 10px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 2000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+      }
+      .modal.open {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        background: #16213e;
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 400px;
+        border: 1px solid #333;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+      .modal-header h2 {
+        color: #667eea;
+        font-size: 15px;
+      }
+      .modal-header .close {
+        background: none;
+        border: none;
+        color: #667eea;
+        font-size: 22px;
+        cursor: pointer;
+      }
+      .form-group {
+        margin-bottom: 10px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 3px;
+        color: #aaa;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        width: 100%;
+        padding: 6px;
+        background: #0f3460;
+        color: #eee;
+        border: 1px solid #333;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+      .modal-actions button {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .btn-cancel {
+        background: #444;
+        color: white;
+      }
+      .btn-submit {
+        background: #667eea;
+        color: white;
+      }
+      .success {
+        color: #2ecc71;
+        font-size: 12px;
+        padding: 8px;
+        background: rgba(46, 204, 113, 0.1);
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      .error {
+        color: #e74c3c;
+        font-size: 12px;
+        padding: 8px;
+        background: rgba(231, 76, 60, 0.1);
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="navbar">
+      <h1>🎬 DC Projects</h1>
+      <div>
+        <span id="userLabel" style="margin-right: 15px; font-size: 12px"></span>
+        <button onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- menu -->
+      <div class="panel-menu" id="menuPanel">
+        <div class="menu-toggle" onclick="toggleMenu()">
+          <span class="menu-toggle-icon" id="toggleIcon">⬅️</span>
+        </div>
+        <div class="menu-section">
+          <div class="menu-title">Main</div>
+          <button
+            class="menu-btn active"
+            onclick="showMenu(event, 'projects')"
+            title="Projects"
+            data-icon="📊"
+          >
+            <span>📊 Projects</span>
+          </button>
+          <button
+            class="menu-btn"
+            id="usersMenuBtn"
+            onclick="showMenu(event, 'users')"
+            title="Users"
+            data-icon="👥"
+            style="display: none"
+          >
+            <span>👥 Users</span>
+          </button>
+          <button
+            class="menu-btn"
+            onclick="showMenu(event, 'settings')"
+            title="Settings"
+            data-icon="⚙️"
+          >
+            <span>⚙️ Settings</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- projects panel (hidden when users view active) -->
+      <div id="projectsView" class="panel-projects">
+        <h3>
+          Projects
+          <button
+            class="btn-add"
+            id="addProjectBtn"
+            onclick="openProjectModal()"
+            style="display: none"
+          >
+            + New
+          </button>
+        </h3>
+        <div class="projects-grid" id="projectsList"></div>
+      </div>
+
+      <!-- users panel (hidden by default) -->
+      <div id="usersView" class="users-view">
+        <div class="users-header">
+          <h3>Users</h3>
+          <button class="btn-add" onclick="openCreateUserModal()">
+            + Add User
+          </button>
+        </div>
+        <div class="users-list" id="usersList"></div>
+      </div>
+
+      <!-- shots -->
+      <div class="panel-shots" id="shotsPanel">
+        <h3>Shots</h3>
+        <div class="shots-controls" id="shotsControls" style="display: none">
+          <button
+            id="addShotBtn"
+            onclick="openShotModal()"
+            style="display: none"
+          >
+            + Add
+          </button>
+          <button
+            id="importShotsBtn"
+            onclick="importShots()"
+            style="display: none"
+          >
+            Import
+          </button>
+          <button onclick="exportCsv()">Export</button>
+        </div>
+
+        <div id="shotsContainer">
+          <div class="empty-state">Select a project</div>
+        </div>
+      </div>
+
+      <!-- details -->
+      <div class="panel-details" id="detailsPanel">
+        <div class="shot-content">
+          <div class="shot-topbar" id="shotTopbar">
+            <div class="left">
+              <label>🎨 Assign:</label>
+              <span
+                id="assignDisplay"
+                style="font-size: 12px; color: #9fb6ff; padding: 6px 8px"
+                >—</span
+              >
+              <select
+                id="topAssign"
+                onchange="updateShotAssign()"
+                style="display: none"
+              >
+                <option value="">—</option>
+              </select>
+              <label style="margin-left: 15px">📋 Status:</label>
+              <select id="topStatus" onchange="updateShotStatus()">
+                <option>Not Started</option>
+                <option>In Progress</option>
+                <option>On Hold</option>
+                <option>Kickback</option>
+                <option>In Review</option>
+                <option>Approved</option>
+                <option>Final</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="shot-details" id="shotDetails">
+            <div class="empty-state">Select a shot</div>
+          </div>
+
+          <div class="details-actions" id="detailsActions">
+            <button class="btn-edit" onclick="editShotClick()">✏️ Edit</button>
+            <button class="btn-delete" onclick="deleteShotClick()">
+              🗑️ Delete
+            </button>
+          </div>
+        </div>
+
+        <div class="preview-section">
+          <div class="video-wrap">
+            <div class="preview-buttons">
+              <button class="preview-btn active" id="previewPlateBtn" onclick="switchPreview('plate', window.currentShot?.plate_path || '')" >🖼️ Plate</button>
+              <button class="preview-btn" id="previewMovBtn" onclick="switchPreview('mov', window.currentShot?.mov_path || '')">▶️ MOV</button>
+              <button class="preview-btn" id="previewExrBtn" onclick="switchPreview('exr', window.currentShot?.exr_path || '')">📦 EXR</button>
+            </div>
+            <div class="player" id="previewPlayer">
+              <div class="player-text">Select a shot to preview</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="comments-section">
+        <div class="comments-header">💬 Comments</div>
+        <div class="comments-list" id="commentsList"></div>
+        <div class="comment-input">
+          <textarea id="commentText" placeholder="Add comment..."></textarea>
+          <button onclick="addCommentClick()">Post</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Project Modal -->
+    <div id="projectModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>New Project</h2>
+          <button class="close" onclick="closeModal('projectModal')">
+            &times;
+          </button>
+        </div>
+        <div id="projectMsg"></div>
+        <div class="form-group">
+          <label>Project Name *</label><input type="text" id="projName" />
+        </div>
+        <div class="form-group">
+          <label>Project Code</label><input type="text" id="projCode" />
+        </div>
+        <div class="form-group">
+          <label>Start Date</label><input type="date" id="projStart" />
+        </div>
+        <div class="form-group">
+          <label>Folder Path</label><input type="text" id="projFolder" />
+        </div>
+        <div class="form-group">
+          <label>Details</label
+          ><textarea id="projDetails" style="height: 60px"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal('projectModal')">
+            Cancel
+          </button>
+          <button class="btn-submit" onclick="createProject()">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shot Modal -->
+    <div id="shotModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="shotModalTitle">Add Shot</h2>
+          <button class="close" onclick="closeModal('shotModal')">
+            &times;
+          </button>
+        </div>
+        <div id="shotMsg"></div>
+        <div class="form-group">
+          <label>Shot Code *</label><input type="text" id="shotCode" />
+        </div>
+        <div class="form-group">
+          <label>Description</label><input type="text" id="shotDesc" />
+        </div>
+        <div class="form-group">
+          <label>Assigned To</label
+          ><select id="shotAssigned">
+            <option value="">—</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Start Date</label><input type="date" id="shotStart" />
+        </div>
+        <div class="form-group">
+          <label>Due Date</label><input type="date" id="shotDue" />
+        </div>
+        <div class="form-group">
+          <label>Status</label
+          ><select id="shotStatus">
+            <option>Not Started</option>
+            <option>In Progress</option>
+            <option>On Hold</option>
+            <option>Kickback</option>
+            <option>In Review</option>
+            <option>Approved</option>
+            <option>Final</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Plate Path</label><input type="text" id="shotPlate" />
+        </div>
+        <div class="form-group">
+          <label>MOV Path</label><input type="text" id="shotMov" />
+        </div>
+        <div class="form-group">
+          <label>EXR Path</label><input type="text" id="shotExr" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal('shotModal')">
+            Cancel
+          </button>
+          <button class="btn-submit" onclick="saveShot()">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div id="createUserModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Create User</h2>
+          <button class="close" onclick="closeModal('createUserModal')">
+            &times;
+          </button>
+        </div>
+        <div id="createUserMsg"></div>
+        <div class="form-group">
+          <label>Username *</label><input type="text" id="newUserName" />
+        </div>
+        <div class="form-group">
+          <label>Password</label
+          ><input
+            type="password"
+            id="newUserPassword"
+            placeholder="Leave blank for default"
+          />
+        </div>
+        <div class="form-group">
+          <label>Display Name</label><input type="text" id="newUserDisplay" />
+        </div>
+        <div class="form-group">
+          <label>Role</label
+          ><select id="newUserRole">
+            <option value="artist">Artist</option>
+            <option value="supervisor">Supervisor</option>
+            <option value="producer">Producer</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal('createUserModal')">
+            Cancel
+          </button>
+          <button class="btn-submit" onclick="createNewUser()">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Import Shots</h2>
+          <button class="close" onclick="closeModal('importModal')">
+            &times;
+          </button>
+        </div>
+        <div id="importMsg"></div>
+        <div class="form-group">
+          <label>CSV File *</label>
+          <input type="file" id="importFile" accept=".csv" />
+          <small style="color: #999; margin-top: 4px; display: block"
+            >Format:
+            shot_code,description,assigned_to,due_date,status,plate_path,mov_path,exr_path</small
+          >
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal('importModal')">
+            Cancel
+          </button>
+          <button class="btn-submit" onclick="doImport()">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentProjectId = null;
+      let currentShotId = null;
+      let editingShotId = null;
+      let currentUser = null;
+      let allUsers = [];
+      let currentView = "projects";
+      let currentPreviewType = "plate"; // track preview type
+
+      // helper to safely embed single-quoted strings inside generated HTML attributes
+      function esc(s) {
+        if (!s && s !== '') return '';
+        return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      }
+
+      function showMenu(ev, section) {
+        // ev is the event passed from onclick="showMenu(event, '...')"
+        const btn = ev && (ev.currentTarget || ev.target);
+        document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
+        if (btn && btn.classList) btn.classList.add('active');
+        currentView = section;
+     
+        if (section === "projects") {
+          document.getElementById("projectsView").style.display = "block";
+          document.getElementById("usersView").classList.remove("show");
+          document.getElementById("shotsPanel").style.display = "flex";
+          document.getElementById("detailsPanel").style.display = "flex";
+        } else if (section === "users") {
+          if (currentUser && currentUser.role !== "admin") {
+            alert("Only admins can access Users section");
+            return;
+          }
+          document.getElementById("projectsView").style.display = "none";
+          document.getElementById("usersView").classList.add("show");
+          document.getElementById("shotsPanel").style.display = "none";
+          document.getElementById("detailsPanel").style.display = "none";
+          loadUsersList();
+        } else if (section === "settings") {
+          alert("Settings - coming soon");
+        }
+      }
+
+      function toggleMenu() {
+        const menu = document.getElementById("menuPanel");
+        const icon = document.getElementById("toggleIcon");
+        const isCollapsed = menu.classList.toggle("collapsed");
+        icon.textContent = isCollapsed ? "➡️" : "⬅️";
+        localStorage.setItem("menuCollapsed", isCollapsed ? "1" : "0");
+      }
+
+      function showMsg(elemId, msg, type = "success") {
+        const el = document.getElementById(elemId);
+        if (!el) return;
+        el.className = type;
+        el.textContent = msg;
+        setTimeout(() => {
+          el.textContent = "";
+          el.className = "";
+        }, 3000);
+      }
+
+      async function loadUsers() {
+        try {
+          allUsers = await fetch("/api/users").then((r) => {
+            if (!r.ok) throw new Error("Failed to load users");
+            return r.json();
+          });
+          const selects = document.querySelectorAll(
+            "#shotAssigned, #topAssign"
+          );
+          selects.forEach((sel) => {
+            const current = sel.value;
+            sel.innerHTML = '<option value="">—</option>';
+            allUsers.forEach((u) => {
+              const opt = document.createElement("option");
+              opt.value = u.username;
+              opt.textContent = u.display_name
+                ? `${u.display_name} (${u.username})`
+                : u.username;
+              sel.appendChild(opt);
+            });
+            sel.value = current;
+          });
+        } catch (e) {
+          console.error("Error loading users:", e);
+        }
+      }
+
+      async function loadUsersList() {
+        try {
+          const users = await fetch("/api/users").then((r) => {
+            if (!r.ok) throw new Error("Failed to load users");
+            return r.json();
+          });
+          const list = document.getElementById("usersList");
+          list.innerHTML = "";
+          users.forEach((u) => {
+            const row = document.createElement("div");
+            row.className = "user-row";
+            row.innerHTML = `
+            <div class="user-info">
+              <h4>${u.display_name || u.username}</h4>
+              <p>Username: ${u.username}</p>
+              <p>Role: <strong>${u.role}</strong></p>
+            </div>
+            <div class="user-actions">
+              <button class="btn-reset" onclick="resetUserPassword(${u.id}, '${
+              u.username
+            }')">🔑 Reset Pwd</button>
+              <button class="btn-delete" onclick="deleteUserClick(${
+                u.id
+              })">🗑️ Delete</button>
+            </div>
+          `;
+            list.appendChild(row);
+          });
+        } catch (e) {
+          console.error("Error loading users:", e);
+        }
+      }
+
+      async function resetUserPassword(userId, username) {
+        const newPassword = prompt(`Enter new password for ${username}:`);
+        if (!newPassword) return;
+        if (newPassword.length < 3) {
+          alert("Password must be at least 3 characters");
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/users/${userId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password: newPassword }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          alert(`Password reset for ${username}`);
+          loadUsersList();
+        } catch (e) {
+          alert("Error: " + e.message);
+        }
+      }
+
+      async function deleteUserClick(userId) {
+        if (!confirm("Delete this user?")) return;
+        try {
+          const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
+          if (!res.ok) throw new Error(await res.text());
+          loadUsersList();
+          await loadUsers();
+        } catch (e) {
+          alert("Error: " + e.message);
+        }
+      }
+
+      async function initApp() {
+        try {
+          const sess = await fetch("/api/session").then((r) => {
+            if (!r.ok) throw new Error("Not logged in");
+            return r.json();
+          });
+          if (!sess.logged_in) {
+            window.location.href = "/login";
+            return;
+          }
+          currentUser = sess;
+          document.getElementById(
+            "userLabel"
+          ).textContent = `${sess.username} (${sess.role})`;
+
+          // Show Users menu only for admins
+          if (currentUser.role === "admin") {
+            document.getElementById("usersMenuBtn").style.display = "block";
+            document.getElementById("addProjectBtn").style.display =
+              "inline-block";
+            document.getElementById("addShotBtn").style.display =
+              "inline-block";
+            document.getElementById("importShotsBtn").style.display =
+              "inline-block";
+            document.getElementById("topAssign").style.display = "block";
+            document.getElementById("assignDisplay").style.display = "none";
+          } else {
+            document.getElementById("topAssign").style.display = "none";
+            document.getElementById("assignDisplay").style.display =
+              "inline-block";
+          }
+
+          // Restore menu state
+          const menuCollapsed = localStorage.getItem("menuCollapsed") === "1";
+          if (menuCollapsed) {
+            document.getElementById("menuPanel").classList.add("collapsed");
+            document.getElementById("toggleIcon").textContent = "➡️";
+          }
+
+          await loadUsers();
+          await loadProjects();
+        } catch (e) {
+          console.error("Init failed:", e);
+          window.location.href = "/login";
+        }
+      }
+
+      async function loadProjects() {
+        try {
+          const projects = await fetch("/api/projects").then((r) => {
+            if (!r.ok) throw new Error("Failed to load projects");
+            return r.json();
+          });
+          const grid = document.getElementById("projectsList");
+          grid.innerHTML = "";
+          projects.forEach((p) => {
+            const card = document.createElement("div");
+            card.className = "project-card";
+            card.dataset.id = p.id;
+            card.onclick = () => selectProject(p.id, p);
+            card.innerHTML = `
+            <div class="project-card-name">${p.name}</div>
+            <div class="project-card-meta">
+              <span><strong>Code:</strong> ${p.short || "-"}</span>
+              <span><strong>Start:</strong> ${p.start_date || "-"}</span>
+            </div>
+          `;
+            grid.appendChild(card);
+          });
+        } catch (e) {
+          console.error("Error loading projects:", e);
+        }
+      }
+
+      async function selectProject(projectId, projectData) {
+        currentProjectId = projectId;
+        document
+          .querySelectorAll(".project-card")
+          .forEach((card) => card.classList.remove("active"));
+        const sel = document.querySelector(`[data-id="${projectId}"]`);
+        if (sel) sel.classList.add("active");
+        document.getElementById("shotsControls").style.display = "flex";
+        await loadShots(projectId);
+        currentShotId = null;
+        document.getElementById("shotTopbar").classList.remove("show");
+        document.getElementById("shotDetails").innerHTML =
+          '<div class="empty-state">Select a shot</div>';
+        document.getElementById("commentsList").innerHTML = "";
+        document.getElementById("detailsActions").style.display = "none";
+      }
+
+      async function loadShots(projectId) {
+        try {
+          console.log("Loading shots for project:", projectId);
+          const shots = await fetch(`/api/projects/${projectId}/shots`).then(
+            (r) => {
+              if (!r.ok) throw new Error("Failed to load shots");
+              return r.json();
+            }
+          );
+          console.log("Shots loaded:", shots);
+          renderShotsTable(shots);
+        } catch (e) {
+          console.error("Error loading shots:", e);
+          document.getElementById("shotsContainer").innerHTML =
+            '<div class="empty-state">Error loading shots</div>';
+        }
+      }
+
+      function renderShotsTable(shots) {
+        const container = document.getElementById("shotsContainer");
+
+        if (!shots || !shots.length) {
+          container.innerHTML = '<div class="empty-state">No shots</div>';
+          return;
+        }
+
+        let html = `
+    <table class="shots-table">
+      <thead>
+        <tr>
+          <th>Shot Code</th>
+          <th>Status</th>
+          <th>Assigned</th>
+          <th>Version</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+        shots.forEach((s) => {
+          const color = getStatusColor(s.status);
+          const version = s.version || "-";
+          const status = s.status || "-";
+
+          html += `
+      <tr data-id="${s.id}" onclick="selectShot(${s.id}, this)"
+          style="border-left: 3px solid ${color}; background-color: ${color}20;">
+        <td><strong>${s.code}</strong></td>
+        <td>
+          <span style="
+            background:${color};
+            color:#fff;
+            padding:2px 6px;
+            border-radius:12px;
+            font-size:10px;">
+            ${status}
+          </span>
+        </td>
+        <td>${s.assigned_to || "-"}</td>
+         <td>${version}</td>
+      </tr>
+    `;
+        });
+
+        html += "</tbody></table>";
+        container.innerHTML = html;
+      }
+
+      function getStatusColor(status) {
+        const m = {
+          "Not Started": "#4b4b4b",     
+    "In Progress": "#EDA711",    
+    "On Hold": "#b35400",         
+    "Kickback": "#b23131",        
+    "In Review": "#11D0F0",     
+    "Approved": "#2CEB26",       
+    "Final": "#005200"            
+        };
+        return m[status] || "#667eea";
+      }
+
+      async function selectShot(shotId, rowEl) {
+        currentShotId = shotId;
+        editingShotId = null;
+        currentPreviewType = "plate";
+        document
+          .querySelectorAll(".shots-table tbody tr")
+          .forEach((tr) => tr.classList.remove("active"));
+        rowEl.classList.add("active");
+        document.getElementById("detailsActions").style.display = "flex";
+        document.getElementById("shotTopbar").classList.add("show");
+
+        try {
+          console.log("Loading shot:", shotId);
+          const shot = await fetch(`/api/shots/${shotId}`).then((r) => {
+            if (!r.ok) throw new Error("Failed to load shot");
+            return r.json();
+          });
+          console.log("Shot loaded:", shot);
+
+          document.getElementById("topAssign").value = shot.assigned_to || "";
+          document.getElementById("assignDisplay").textContent =
+            shot.assigned_to || "—";
+          document.getElementById("topStatus").value =
+            shot.status || "Not Started";
+
+          // Store shot data globally
+          window.currentShot = shot;
+
+          // Populate shot details panel
+          const details = document.getElementById("shotDetails");
+          details.innerHTML = `
+            <h4>
+              ${shot.code}
+            </h4>
+            <div class="shot-meta">
+              <div><strong>Version:</strong> ${shot.version || "-"}</div>
+              <div><strong>Start Date:</strong> ${shot.start_date || "-"}</div>
+              <div><strong>Due Date:</strong> ${shot.due_date || "-"}</div>
+              <div><strong>Description:</strong> ${shot.description || "-"}</div>
+              <div><strong>Assigned To:</strong> ${shot.assigned_to || "-"}</div>
+              <div><strong>Status:</strong> ${shot.status || "-"}</div>
+              <div><strong>Plate:</strong> ${shot.plate_path ? "✓" : "-"}</div>
+              <div><strong>MOV:</strong> ${shot.mov_path ? "✓" : "-"}</div>
+              <div><strong>EXR:</strong> ${shot.exr_path ? "✓" : "-"}</div>
+              <div><strong>Comp:</strong> ${shot.comp ? "✓" : "-"}</div>
+            </div>
+          `;
+
+          // Update preview buttons states
+          document.getElementById("previewPlateBtn").disabled = !shot.plate_path;
+          document.getElementById("previewMovBtn").disabled = !shot.mov_path;
+          document.getElementById("previewExrBtn").disabled = !shot.exr_path;
+
+          // Load initial preview
+          updatePreview(shot.plate_path);
+
+          await loadComments(shotId);
+        } catch (e) {
+          console.error("Error loading shot:", e);
+          alert("Error: " + e.message);
+        }
+      }
+
+      function updatePreview(filePath) {
+        const player = document.getElementById("previewPlayer");
+        player.innerHTML = renderPreview(filePath);
+      }
+
+      function renderPreview(filePath) {
+        if (!filePath) return '<div class="player-text">No preview</div>';
+
+        const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(filePath);
+        const isVid = /\.(mp4|mov|avi|mkv|webm|m4v|flv)$/i.test(filePath);
+
+        if (isImg) {
+          return `<img src="/api/shot_thumb/${currentShotId}" onerror="this.src='/api/stream_file?path=${encodeURIComponent(
+            filePath
+          )}'; this.onerror=null;">`;
+        }
+
+        if (isVid) {
+          const mediaType = currentPreviewType || 'plate';
+          let previewUrl;
+          if (currentShotId && mediaType !== 'custom') {
+            previewUrl = `/api/shot_media/${currentShotId}?type=${mediaType}`;
+          } else {
+            previewUrl = `/api/stream_file?path=${encodeURIComponent(filePath)}`;
+          }
+          return `
+          <video controls style="width:100%; height:100%; object-fit:cover;">
+            <source src="${previewUrl}" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+        `;
+        }
+
+        return `
+      <div class="player-text">
+        <div>📁 File</div>
+        <div style="margin-top: 10px; font-size: 11px; color: #666; word-break: break-all;">${filePath}</div>
+        <button style="margin-top: 10px; padding: 6px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;" onclick="openFileLocation('${esc(filePath)}')">📂 Open Location</button>
+      </div>
+    `;
+      }
+
+      function switchPreview(type, filePath) {
+        if (!filePath) return;
+        currentPreviewType = type;
+
+        document.getElementById("previewPlateBtn").classList.remove("active");
+        document.getElementById("previewMovBtn").classList.remove("active");
+        document.getElementById("previewExrBtn").classList.remove("active");
+
+        if (type === "plate")
+          document.getElementById("previewPlateBtn").classList.add("active");
+        else if (type === "mov")
+          document.getElementById("previewMovBtn").classList.add("active");
+        else if (type === "exr")
+          document.getElementById("previewExrBtn").classList.add("active");
+
+        updatePreview(filePath);
+      }
+
+      function downloadFile(filePath) {
+        if (!filePath) {
+          alert("No file to download");
+          return;
+        }
+        window.open(filePath);
+      }
+
+      function openFileLocation(filePath) {
+        if (!filePath) {
+          alert("No file path");
+          return;
+        }
+        fetch("/api/open_folder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: filePath }),
+        })
+          .then((r) => {
+            if (!r.ok)
+              alert(
+                "File path:\n\n" +
+                  filePath +
+                  "\n\nPlease copy and open manually"
+              );
+          })
+          .catch(() => {
+            alert(
+              "File path:\n\n" + filePath + "\n\nPlease copy and open manually"
+            );
+          });
+      }
+
+      async function loadComments(shotId) {
+        try {
+          const comments = await fetch(`/api/shots/${shotId}/comments`).then(
+            (r) => {
+              if (!r.ok) throw new Error("Failed to load comments");
+              return r.json();
+            }
+          );
+          const list = document.getElementById("commentsList");
+          if (!comments || !comments.length) {
+            list.innerHTML = "";
+            return;
+          }
+          let html = "";
+          comments.forEach((c) => {
+            const time = new Date(c.created_at).toLocaleString();
+            html += `<div class="comment-item">
+                    <div class="comment-author">${c.author}</div>
+                    <div class="comment-time">${time}</div>
+                    <div class="comment-text">${c.text}</div>
+                  </div>`;
+          });
+          list.innerHTML = html;
+        } catch (e) {
+          console.error("Error loading comments:", e);
+        }
+      }
+
+      async function addCommentClick() {
+        if (!currentShotId) {
+          alert("Select a shot");
+          return;
+        }
+        const text = document.getElementById("commentText").value.trim();
+        if (!text) return;
+        try {
+          const res = await fetch(`/api/shots/${currentShotId}/comments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          document.getElementById("commentText").value = "";
+          await loadComments(currentShotId);
+        } catch (e) {
+          alert("Error: " + e.message);
+        }
+      }
+
+      async function updateShotAssign() {
+        if (!currentShotId) return;
+        const assigned_to = document.getElementById("topAssign").value || "";
+        try {
+          const res = await fetch(`/api/shots/${currentShotId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ assigned_to }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadShots(currentProjectId);
+        } catch (e) {
+          alert("Error updating: " + e.message);
+        }
+      }
+
+      async function updateShotStatus() {
+        if (!currentShotId) return;
+        const status = document.getElementById("topStatus").value;
+        try {
+          const res = await fetch(`/api/shots/${currentShotId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          const row =
+            document.querySelector(`.shots-table tbody tr[data-id="${currentShotId}"]`) ||
+            document.querySelector(`.shots-table tbody tr.active`);
+          if (row) {
+            const color = getStatusColor(status);
+            row.style.borderLeftColor = color;
+            row.style.backgroundColor = color + "20";
+          }
+          await loadShots(currentProjectId);
+        } catch (e) {
+          alert("Error updating: " + e.message);
+        }
+      }
+
+      function openProjectModal() {
+        document.getElementById("projectMsg").textContent = "";
+        closeForm("projectModal");
+        document.getElementById("projectModal").classList.add("open");
+      }
+      function openShotModal() {
+        if (!currentProjectId) {
+          alert("Select a project");
+          return;
+        }
+        document.getElementById("shotMsg").textContent = "";
+        closeForm("shotModal");
+        document.getElementById("shotModalTitle").textContent = "Add Shot";
+        editingShotId = null;
+        document.getElementById("shotModal").classList.add("open");
+      }
+      function openCreateUserModal() {
+        document.getElementById("createUserMsg").textContent = "";
+        closeForm("createUserModal");
+        document.getElementById("createUserModal").classList.add("open");
+      }
+
+      function closeModal(id) {
+        document.getElementById(id).classList.remove("open");
+      }
+      function closeForm(id) {
+        document
+          .querySelectorAll(`#${id} input, #${id} textarea, #${id} select`)
+          .forEach((el) => (el.value = ""));
+      }
+
+      async function createProject() {
+        const name = document.getElementById("projName").value.trim();
+        if (!name) {
+          showMsg("projectMsg", "Name required", "error");
+          return;
+        }
+        try {
+          const res = await fetch("/api/projects", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              short:
+                document.getElementById("projCode").value ||
+                name.substring(0, 3).toUpperCase(),
+              start_date: document.getElementById("projStart").value,
+              folder_path: document.getElementById("projFolder").value,
+              details_text: document.getElementById("projDetails").value,
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.text();
+            throw new Error(err);
+          }
+          closeModal("projectModal");
+          showMsg("projectMsg", "Project created!", "success");
+          await loadProjects();
+        } catch (e) {
+          showMsg("projectMsg", "Error: " + e.message, "error");
+        }
+      }
+
+      async function saveShot() {
+        const code = document.getElementById("shotCode").value.trim();
+        if (!code) {
+          showMsg("shotMsg", "Code required", "error");
+          return;
+        }
+        if (!currentProjectId) {
+          showMsg("shotMsg", "Select a project", "error");
+          return;
+        }
+        try {
+          const payload = {
+            code,
+            description: document.getElementById("shotDesc").value.trim(),
+            assigned_to: document.getElementById("shotAssigned").value.trim(),
+            start_date: document.getElementById("shotStart").value.trim(),
+            due_date: document.getElementById("shotDue").value.trim(),
+            status: document.getElementById("shotStatus").value,
+            plate_path: document.getElementById("shotPlate").value.trim(),
+            mov_path: document.getElementById("shotMov").value.trim(),
+            exr_path: document.getElementById("shotExr").value.trim(),
+          };
+
+          console.log("Saving shot with payload:", payload);
+
+          let url, method;
+          if (editingShotId) {
+            url = `/api/shots/${editingShotId}`;
+            method = "PUT";
+          } else {
+            url = `/api/projects/${currentProjectId}/shots`;
+            method = "POST";
+          }
+
+          const res = await fetch(url, {
+            method: method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!res.ok) {
+            const err = await res.text();
+            throw new Error(err);
+          }
+
+          const result = await res.json();
+          console.log("Shot saved:", result);
+
+          closeModal("shotModal");
+          showMsg(
+            "shotMsg",
+            editingShotId ? "Shot updated!" : "Shot created!",
+            "success"
+          );
+          await loadShots(currentProjectId);
+        } catch (e) {
+          console.error("Error saving shot:", e);
+          showMsg("shotMsg", "Error: " + e.message, "error");
+        }
+      }
+
+      async function editShotClick() {
+        if (!currentShotId) return;
+        try {
+          const shot = await fetch(`/api/shots/${currentShotId}`).then((r) => {
+            if (!r.ok) throw new Error("Failed to load shot");
+            return r.json();
+          });
+          document.getElementById("shotCode").value = shot.code;
+          document.getElementById("shotDesc").value = shot.description || "";
+          document.getElementById("shotAssigned").value =
+            shot.assigned_to || "";
+          document.getElementById("shotStart").value = shot.start_date || "";
+          document.getElementById("shotDue").value = shot.due_date || "";
+          document.getElementById("shotStatus").value =
+            shot.status || "Not Started";
+          document.getElementById("shotPlate").value = shot.plate_path || "";
+          document.getElementById("shotMov").value = shot.mov_path || "";
+          document.getElementById("shotExr").value = shot.exr_path || "";
+          document.getElementById("shotModalTitle").textContent = "Edit Shot";
+          editingShotId = currentShotId;
+          document.getElementById("shotModal").classList.add("open");
+        } catch (e) {
+          alert("Error: " + e.message);
+        }
+      }
+
+      async function deleteShotClick() {
+        if (!currentShotId) return;
+        if (!confirm("Delete this shot?")) return;
+        try {
+          const res = await fetch(`/api/shots/${currentShotId}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) throw new Error(await res.text());
+          currentShotId = null;
+          document.getElementById("shotTopbar").classList.remove("show");
+          document.getElementById("shotDetails").innerHTML =
+            '<div class="empty-state">Select a shot</div>';
+          document.getElementById("detailsActions").style.display = "none";
+          await loadShots(currentProjectId);
+        } catch (e) {
+          alert("Error: " + e.message);
+        }
+      }
+
+      async function createNewUser() {
+        const username = document.getElementById("newUserName").value.trim();
+        if (!username) {
+          showMsg("createUserMsg", "Username required", "error");
+          return;
+        }
+        try {
+          const res = await fetch("/api/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username,
+              password:
+                document.getElementById("newUserPassword").value || "changeme",
+              display_name: document.getElementById("newUserDisplay").value,
+              role: document.getElementById("newUserRole").value,
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          showMsg("createUserMsg", "User created!", "success");
+          await loadUsers();
+          await loadUsersList();
+          setTimeout(() => closeModal("createUserModal"), 1500);
+        } catch (e) {
+          showMsg("createUserMsg", "Error: " + e.message, "error");
+        }
+      }
+
+      function importShots() {
+        if (!currentProjectId) {
+          alert("Select a project");
+          return;
+        }
+        document.getElementById("importMsg").textContent = "";
+        closeForm("importModal");
+        document.getElementById("importModal").classList.add("open");
+      }
+
+      async function doImport() {
+        if (!currentProjectId) return;
+        const file = document.getElementById("importFile").files[0];
+        if (!file) {
+          showMsg("importMsg", "Select a file", "error");
+          return;
+        }
+        try {
+          const text = await file.text();
+          const lines = text.trim().split("\n");
+          if (lines.length < 2) {
+            showMsg("importMsg", "CSV too short", "error");
+            return;
+          }
+          let count = 0;
+          for (let i = 1; i < lines.length; i++) {
+            const vals = lines[i].split(",").map((v) => v.trim());
+            if (!vals[0]) continue;
+            const shot = {
+              code: vals[0],
+              description: vals[1] || "",
+              assigned_to: vals[2] || "",
+              due_date: vals[3] || "",
+              status: vals[4] || "Not Started",
+              plate_path: vals[5] || "",
+              mov_path: vals[6] || "",
+              exr_path: vals[7] || "",
+            };
+            const res = await fetch(`/api/projects/${currentProjectId}/shots`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(shot),
+            });
+            if (res.ok) count++;
+          }
+          showMsg("importMsg", `Imported ${count} shots!`, "success");
+          setTimeout(() => {
+            closeModal("importModal");
+            loadShots(currentProjectId);
+          }, 1500);
+        } catch (e) {
+          showMsg("importMsg", "Error: " + e.message, "error");
+        }
+      }
+
+      function exportCsv() {
+        if (!currentProjectId) {
+          alert("Select a project");
+          return;
+        }
+        window.open(`/api/projects/${currentProjectId}/export_csv`);
+      }
+
+      function logout() {
+        fetch("/logout", { method: "POST" }).then(
+          () => (window.location.href = "/login")
+        );
+      }
+
+      document.addEventListener("DOMContentLoaded", initApp);
+    </script>
+  </body>
+</html>
