@@ -804,6 +804,7 @@
             Import
           </button>
           <button onclick="exportCsv()">Export</button>
+          <button onclick="openFilterModal()">🔍 Filter</button>
         </div>
 
         <div id="shotsContainer">
@@ -1025,17 +1026,48 @@
         <div id="importMsg"></div>
         <div class="form-group">
           <label>CSV File *</label>
-          <input type="file" id="importFile" accept=".csv" />
-          <small style="color: #999; margin-top: 4px; display: block"
-            >Format:
-            shot_code,description,assigned_to,due_date,status,plate_path,mov_path,exr_path</small
-          >
+          <input type="file" id="importFile" accept=".csv" onchange="previewImport()" />
+          <small id="importHint" style="color: #999; margin-top: 4px; display: block">
+            Format: shot_code,description,assigned_to,start_date,due_date,status,plate_path,mov_path,exr_path,version
+          </small>
+          <div id="importPreview" style="margin-top:8px; font-size:13px; color:#ccc"></div>
         </div>
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal('importModal')">
             Cancel
           </button>
           <button class="btn-submit" onclick="doImport()">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Modal -->
+    <div id="filterModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Filter Shots</h2>
+          <button class="close" onclick="closeModal('filterModal')">
+            &times;
+          </button>
+        </div>
+        <div id="filterMsg"></div>
+        <div class="form-group">
+          <label>Shot Code</label>
+          <input type="text" id="filterCode" placeholder="e.g., SH01" />
+        </div>
+        <div class="form-group">
+          <label>Version</label>
+          <input type="text" id="filterVersion" placeholder="e.g., V001" />
+        </div>
+        <div class="form-group">
+          <label>Assigned To</label>
+          <select id="filterAssigned">
+            <option value="">— All —</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="clearFilters()">Clear</button>
+          <button class="btn-submit" onclick="applyFilters()">Apply</button>
         </div>
       </div>
     </div>
@@ -1048,6 +1080,8 @@
       let allUsers = [];
       let currentView = "projects";
       let currentPreviewType = "plate"; // track preview type
+      let allShots = []; // store all shots for filtering
+      let currentFilters = { code: "", version: "", assigned_to: "" };
 
       // helper to safely embed single-quoted strings inside generated HTML attributes
       function esc(s) {
@@ -1296,12 +1330,66 @@
             }
           );
           console.log("Shots loaded:", shots);
+          allShots = shots; // store for filtering
+          currentFilters = { code: "", version: "", assigned_to: "" }; // reset filters
           renderShotsTable(shots);
+          populateFilterDropdowns(shots);
         } catch (e) {
           console.error("Error loading shots:", e);
           document.getElementById("shotsContainer").innerHTML =
             '<div class="empty-state">Error loading shots</div>';
         }
+      }
+
+      function populateFilterDropdowns(shots) {
+        const select = document.getElementById("filterAssigned");
+        if (!select) return;
+        const artists = new Set();
+        shots.forEach((s) => {
+          if (s.assigned_to) artists.add(s.assigned_to);
+        });
+        const opts = Array.from(artists).sort();
+        select.innerHTML = '<option value="">— All —</option>' + opts.map((a) => `<option value="${a}">${a}</option>`).join("");
+      }
+
+      function openFilterModal() {
+        if (!currentProjectId) {
+          alert("Select a project");
+          return;
+        }
+        document.getElementById("filterMsg").textContent = "";
+        document.getElementById("filterCode").value = currentFilters.code;
+        document.getElementById("filterVersion").value = currentFilters.version;
+        document.getElementById("filterAssigned").value = currentFilters.assigned_to;
+        document.getElementById("filterModal").classList.add("open");
+      }
+
+      function applyFilters() {
+        const code = document.getElementById("filterCode").value.trim().toLowerCase();
+        const version = document.getElementById("filterVersion").value.trim().toLowerCase();
+        const assigned_to = document.getElementById("filterAssigned").value.trim();
+
+        currentFilters = { code, version, assigned_to };
+
+        const filtered = allShots.filter((s) => {
+          if (code && !s.code.toLowerCase().includes(code)) return false;
+          if (version && !(s.version || "").toLowerCase().includes(version)) return false;
+          if (assigned_to && s.assigned_to !== assigned_to) return false;
+          return true;
+        });
+
+        renderShotsTable(filtered);
+        closeModal("filterModal");
+        showMsg("filterMsg", `Showing ${filtered.length} of ${allShots.length} shots`, "success");
+      }
+
+      function clearFilters() {
+        document.getElementById("filterCode").value = "";
+        document.getElementById("filterVersion").value = "";
+        document.getElementById("filterAssigned").value = "";
+        currentFilters = { code: "", version: "", assigned_to: "" };
+        renderShotsTable(allShots);
+        closeModal("filterModal");
       }
 
       function renderShotsTable(shots) {
@@ -1819,6 +1907,44 @@
         document.getElementById("importModal").classList.add("open");
       }
 
+      async function previewImport() {
+        const file = document.getElementById("importFile").files[0];
+        const previewEl = document.getElementById("importPreview");
+        previewEl.innerHTML = '';
+        if (!file) return;
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const res = await fetch(`/api/projects/${currentProjectId}/import_preview`, { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!res.ok) {
+            previewEl.innerText = 'Preview failed: ' + (data.error || 'unknown');
+            return;
+          }
+          window._lastImportPreview = data;
+          let html = '';
+          if (data.has_headers) {
+            html += '<div><strong>Detected headers:</strong> ' + data.headers.join(', ') + '</div>';
+          } else {
+            html += '<div><strong>No headers detected — using positional mapping.</strong></div>';
+          }
+          html += '<div style="margin-top:6px"><strong>Suggested mapping:</strong><ul>';
+          for (const k of Object.keys(data.suggested_mapping)) {
+            const v = data.suggested_mapping[k];
+            if (v === null) html += `<li>${k}: <em>not found</em></li>`;
+            else if (typeof v === 'object' && v.pos !== undefined) html += `<li>${k}: column #${v.pos + 1}</li>`;
+            else html += `<li>${k}: ${v}</li>`;
+          }
+          html += '</ul></div>';
+          if (data.sample && data.sample.length) {
+            html += '<div style="margin-top:6px"><strong>Sample rows:</strong><pre style="white-space:pre-wrap; color:#bbb; font-size:12px">' + data.sample.map(r=>r.join(', ')).join('\n') + '</pre></div>';
+          }
+          previewEl.innerHTML = html;
+        } catch (e) {
+          previewEl.innerText = 'Preview error: ' + e.message;
+        }
+      }
+
       async function doImport() {
         if (!currentProjectId) return;
         const file = document.getElementById("importFile").files[0];
@@ -1826,35 +1952,26 @@
           showMsg("importMsg", "Select a file", "error");
           return;
         }
+
+        const fd = new FormData();
+        fd.append("file", file);
+
         try {
-          const text = await file.text();
-          const lines = text.trim().split("\n");
-          if (lines.length < 2) {
-            showMsg("importMsg", "CSV too short", "error");
+          const res = await fetch(`/api/projects/${currentProjectId}/import_csv`, {
+            method: "POST",
+            body: fd,
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            const msg = data && (data.error || (data.errors && data.errors[0] && data.errors[0].error)) ? (data.error || data.errors[0].error) : "Import failed";
+            showMsg("importMsg", "Error: " + msg, "error");
             return;
           }
-          let count = 0;
-          for (let i = 1; i < lines.length; i++) {
-            const vals = lines[i].split(",").map((v) => v.trim());
-            if (!vals[0]) continue;
-            const shot = {
-              code: vals[0],
-              description: vals[1] || "",
-              assigned_to: vals[2] || "",
-              due_date: vals[3] || "",
-              status: vals[4] || "Not Started",
-              plate_path: vals[5] || "",
-              mov_path: vals[6] || "",
-              exr_path: vals[7] || "",
-            };
-            const res = await fetch(`/api/projects/${currentProjectId}/shots`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(shot),
-            });
-            if (res.ok) count++;
-          }
+          const count = data.imported || 0;
           showMsg("importMsg", `Imported ${count} shots!`, "success");
+          if (data.errors && data.errors.length) {
+            console.warn("Import errors:", data.errors);
+          }
           setTimeout(() => {
             closeModal("importModal");
             loadShots(currentProjectId);

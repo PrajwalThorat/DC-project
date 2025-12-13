@@ -4,6 +4,7 @@ import csv
 import shutil
 import subprocess
 import platform
+import re
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
@@ -336,7 +337,7 @@ def project_shots(project_id):
             code = data.get("code")
             description = data.get("description")
             assigned_to = data.get("assigned_to")
-            start_date = request.form.get("start_date")
+            start_date = data.get("start_date")
             due_date = data.get("due_date")
             status = data.get("status") or "Not Started"
             plate_path = data.get("plate_path") or ""
@@ -701,11 +702,286 @@ def api_export_csv(project_id):
     cw.writerow(["id", "code", "reel", "version", "description", "assigned_to", "due_date", "status", "plate_path", "mov_path", "exr_path"])
     for s in shots:
         reel = (s.code or "").split("_")[1] if "_" in (s.code or "") else ""
-        cw.writerow([s.id, s.code, reel, s.version or "", s.description, s.assigned_to, s.due_date, s.status, s.plate_path, s.mov_path, s.exr_path])
+        # Use extracted version to ensure consistency with UI/display logic
+        cw.writerow([s.id, s.code, reel, s.extract_version() or "", s.description, s.assigned_to, s.due_date, s.status, s.plate_path, s.mov_path, s.exr_path])
     output = make_response(si.getvalue())
     output.headers["Content-Disposition"] = f"attachment; filename={proj.name}_shots_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.csv"
     output.headers["Content-type"] = "text/csv"
     return output
+
+
+@app.route("/api/projects/<int:project_id>/import_csv", methods=["POST"])
+def api_import_csv(project_id):
+    """Import shots from uploaded CSV file. Accepts multipart/form-data with field 'file'.
+
+    CSV may include a header row. If headers exist, column names will be mapped
+    to known fields (code, description, assigned_to, start_date, due_date,
+    status, plate_path, mov_path, exr_path, version). If no headers, positional
+    columns are used (same order as previous client import).
+    """
+    uid = session.get("user_id")
+    current = User.query.get(uid) if uid else None
+    if not current or current.role not in ("admin", "producer", "supervisor"):
+        return jsonify({"error": "forbidden"}), 403
+
+    if "file" not in request.files:
+        return jsonify({"error": "file field required"}), 400
+
+    f = request.files["file"]
+    try:
+        raw = f.read()
+        # Support files with BOM
+        try:
+            text = raw.decode("utf-8-sig")
+        except Exception:
+            text = raw.decode("utf-8", errors="replace")
+    except Exception as e:
+        return jsonify({"error": "could not read file", "detail": str(e)}), 400
+
+    si = StringIO(text)
+    errors = []
+    imported = 0
+
+    # Helper aliases
+    aliases = {
+        "code": ["code", "shot_code", "shot", "shotcode"],
+        "description": ["description", "desc", "notes"],
+        "assigned_to": ["assigned_to", "assigned", "artist", "assignee"],
+        "start_date": ["start_date", "start"],
+        "due_date": ["due_date", "due"],
+        "status": ["status", "state"],
+        "plate_path": ["plate_path", "plate"],
+        "mov_path": ["mov_path", "mov", "movie"],
+        "exr_path": ["exr_path", "exr"],
+        "version": ["version", "ver", "v"]
+    }
+
+    # Try DictReader first (handles headers and quoted commas)
+    si.seek(0)
+    reader = csv.DictReader(si)
+    has_headers = reader.fieldnames is not None and any(h.strip() for h in reader.fieldnames)
+
+    si.seek(0)
+    to_insert = []
+    if has_headers:
+        dr = csv.DictReader(StringIO(text))
+        line_no = 1
+        for row in dr:
+            line_no += 1
+            # normalize keys
+            row_lc = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k is not None}
+
+            def get_alias(field):
+                for a in aliases.get(field, []):
+                    if a in row_lc and row_lc[a] != "":
+                        return row_lc[a]
+                return ""
+
+            code = get_alias("code")
+            description = get_alias("description")
+            assigned_to = get_alias("assigned_to")
+            start_date = get_alias("start_date")
+            due_date = get_alias("due_date")
+            status = get_alias("status") or "Not Started"
+            plate_path = get_alias("plate_path")
+            mov_path = get_alias("mov_path")
+            exr_path = get_alias("exr_path")
+            version = get_alias("version")
+
+            if not code:
+                errors.append({"line": line_no, "error": "missing code"})
+                continue
+
+            if not version:
+                m = re.search(r"[Vv](\d+)", code)
+                if m:
+                    version = f"V{m.group(1)}"
+
+            # build mapping for bulk insert
+            mapping = {
+                "project_id": project_id,
+                "code": code,
+                "description": description,
+                "assigned_to": assigned_to,
+                "start_date": start_date,
+                "due_date": due_date,
+                "status": status,
+                "plate_path": plate_path,
+                "mov_path": mov_path,
+                "exr_path": exr_path,
+                "version": version,
+            }
+            to_insert.append(mapping)
+    else:
+        # No headers - fallback to positional mapping (legacy behavior)
+        si2 = StringIO(text)
+        rows_list = list(csv.reader(si2))
+
+        # filter out empty rows
+        filtered = [r for r in rows_list if any((c or '').strip() for c in r)]
+
+        # detect numeric index column in first position (common when exported from Excel)
+        sample = filtered[:6]
+        first_col_vals = [r[0].strip() for r in sample if len(r) > 0]
+        numeric_first = sum(1 for v in first_col_vals if re.match(r"^\d+$", v))
+        skip_index = False
+        if first_col_vals and numeric_first >= max(1, len(first_col_vals) - 1):
+            skip_index = True
+
+        line_no = 0
+        for vals in filtered:
+            line_no += 1
+            # If first column is an index, shift columns by one
+            idx = 1 if skip_index else 0
+            code = vals[idx].strip() if len(vals) > idx else ""
+            description = vals[idx+1].strip() if len(vals) > idx+1 else ""
+            assigned_to = vals[idx+2].strip() if len(vals) > idx+2 else ""
+            start_date = vals[idx+3].strip() if len(vals) > idx+3 else ""
+            due_date = vals[idx+4].strip() if len(vals) > idx+4 else ""
+            status = vals[idx+5].strip() if len(vals) > idx+5 and vals[idx+5].strip() else "Not Started"
+            plate_path = vals[idx+6].strip() if len(vals) > idx+6 else ""
+            mov_path = vals[idx+7].strip() if len(vals) > idx+7 else ""
+            exr_path = vals[idx+8].strip() if len(vals) > idx+8 else ""
+            version = vals[idx+9].strip() if len(vals) > idx+9 else ""
+
+            if not code:
+                errors.append({"line": line_no, "error": "missing code"})
+                continue
+
+            if not version:
+                m = re.search(r"[Vv](\d+)", code)
+                if m:
+                    version = f"V{m.group(1)}"
+
+            mapping = {
+                "project_id": project_id,
+                "code": code,
+                "description": description,
+                "assigned_to": assigned_to,
+                "start_date": start_date,
+                "due_date": due_date,
+                "status": status,
+                "plate_path": plate_path,
+                "mov_path": mov_path,
+                "exr_path": exr_path,
+                "version": version,
+            }
+            to_insert.append(mapping)
+
+    # Perform bulk insert for speed
+    if to_insert:
+        try:
+            # Use bulk_insert_mappings to bypass per-object overhead
+            db.session.bulk_insert_mappings(Shot, to_insert)
+            db.session.commit()
+            imported = len(to_insert)
+        except Exception as e:
+            db.session.rollback()
+            errors.append({"error": "bulk insert failed", "detail": str(e)})
+
+    return jsonify({"imported": imported, "errors": errors})
+
+
+@app.route("/api/projects/<int:project_id>/import_preview", methods=["POST"])
+def api_import_preview(project_id):
+    """Preview an uploaded CSV and suggest column mapping.
+
+    Returns detected headers (if any), first 3 data rows, and a suggested mapping
+    from canonical field names to header names or positional indexes.
+    """
+    uid = session.get("user_id")
+    current = User.query.get(uid) if uid else None
+    if not current:
+        return jsonify({"error": "login required"}), 403
+
+    if "file" not in request.files:
+        return jsonify({"error": "file field required"}), 400
+
+    f = request.files["file"]
+    try:
+        raw = f.read()
+        try:
+            text = raw.decode("utf-8-sig")
+        except Exception:
+            text = raw.decode("utf-8", errors="replace")
+    except Exception as e:
+        return jsonify({"error": "could not read file", "detail": str(e)}), 400
+
+    si = StringIO(text)
+    # Use csv module to safely parse first few rows
+    try:
+        rdr = csv.reader(si)
+        rows = []
+        for i, r in enumerate(rdr):
+            if i >= 5:
+                break
+            rows.append([c.strip() for c in r])
+    except Exception as e:
+        return jsonify({"error": "csv parse failed", "detail": str(e)}), 400
+
+    # Determine if first row looks like headers (non-numeric or contains letters)
+    headers = None
+    if rows:
+        first = rows[0]
+        # Heuristic: if any cell in first row contains a letter and not all are numeric, treat as header
+        if any(re.search(r"[A-Za-z]", (c or "")) for c in first):
+            headers = first
+            data_rows = rows[1:4]
+        else:
+            headers = None
+            data_rows = rows[0:3]
+    else:
+        data_rows = []
+
+    # canonical fields and aliases (reuse from import_csv)
+    aliases = {
+        # avoid mapping generic 'id' header to code — index columns often contain numeric ids
+        "code": ["code", "shot_code", "shot", "shotcode"],
+        "description": ["description", "desc", "notes"],
+        "assigned_to": ["assigned_to", "assigned", "artist", "assignee"],
+        "start_date": ["start_date", "start"],
+        "due_date": ["due_date", "due"],
+        "status": ["status", "state"],
+        "plate_path": ["plate_path", "plate"],
+        "mov_path": ["mov_path", "mov", "movie"],
+        "exr_path": ["exr_path", "exr"],
+        "version": ["version", "ver", "v"]
+    }
+
+    suggested = {}
+    if headers:
+        lowered = [h.strip().lower() for h in headers]
+        for field, al in aliases.items():
+            found = None
+            for a in al:
+                if a in lowered:
+                    # map to the original header string (preserve case)
+                    idx = lowered.index(a)
+                    found = headers[idx]
+                    break
+            suggested[field] = found
+    else:
+        # positional suggestion (index-based)
+        # default positional mapping: code,description,assigned_to,start_date,due_date,status,plate_path,mov_path,exr_path,version
+        posmap = ["code","description","assigned_to","start_date","due_date","status","plate_path","mov_path","exr_path","version"]
+        # detect numeric index column in first position and advise shifting if present
+        sample = data_rows[:6]
+        first_col_vals = [r[0] for r in sample if len(r) > 0]
+        numeric_first = sum(1 for v in first_col_vals if re.match(r"^\d+$", (v or "")))
+        skip_index = False
+        if first_col_vals and numeric_first >= max(1, len(first_col_vals) - 1):
+            skip_index = True
+
+        for i, p in enumerate(posmap):
+            if skip_index:
+                suggested[p] = {"pos": i + 1}
+            else:
+                suggested[p] = {"pos": i}
+
+    # Quick check whether code column detected
+    code_found = bool(suggested.get("code"))
+
+    return jsonify({"has_headers": bool(headers), "headers": headers or [], "sample": data_rows, "suggested_mapping": suggested, "code_found": code_found})
 
 
 @app.route("/api/projects/<int:project_id>/raw")
