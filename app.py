@@ -23,6 +23,12 @@ app = Flask(
     template_folder=str(BASE_DIR / "templates")
 )
 
+# Configuration from environment
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+DEBUG_MODE = os.environ.get("DEBUG", "True").lower() == "true"
+DEV_PORT = int(os.environ.get("DEV_PORT", 5000))
+PROD_PORT = int(os.environ.get("PROD_PORT", 8000))
+
 app.config["SECRET_KEY"] = os.environ.get("DC_SECRET_KEY", "dc_projects_secret_change")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{BASE_DIR / 'dc_projects.db'}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -141,17 +147,29 @@ def index():
 def login():
     if request.method == "GET":
         return render_template("login.html")
+    
+    # Ensure database is initialized
+    try:
+        with app.app_context():
+            ensure_db()
+    except Exception as e:
+        app.logger.error(f"Database initialization failed: {e}")
+    
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
     if not username or not password:
         return "username & password required", 400
-    user = User.query.filter_by(username=username).first()
-    if not user or not user.check_password(password):
-        return "Invalid credentials", 401
-    session["user_id"] = user.id
-    session["username"] = user.username
-    session["role"] = user.role
-    return redirect(url_for("index"))
+    try:
+        user = User.query.filter_by(username=username).first()
+        if not user or not user.check_password(password):
+            return "Invalid credentials", 401
+        session["user_id"] = user.id
+        session["username"] = user.username
+        session["role"] = user.role
+        return redirect(url_for("index"))
+    except Exception as e:
+        app.logger.error(f"Login error: {e}")
+        return f"Login failed: {str(e)}", 500
 
 
 # API-compatible login for AJAX
@@ -747,4 +765,35 @@ if __name__ == "__main__":
     with app.app_context():
         ensure_db()
 
-    app.run(host="127.0.0.1", port=5000, debug=True)
+# -------------------------
+# STARTUP
+# -------------------------
+if __name__ == "__main__":
+    # ensure base data folder exists
+    try:
+        os.makedirs(BASE_DIR / "data", exist_ok=True)
+    except Exception:
+        pass
+
+    with app.app_context():
+        try:
+            ensure_db()
+            print("✅ Database initialized successfully")
+        except Exception as e:
+            print(f"⚠️ Database initialization error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Determine port and host based on environment
+    if ENVIRONMENT == "production":
+        # Production mode - Gunicorn will handle this, but set defaults
+        port = PROD_PORT
+        host = "0.0.0.0"
+        debug = False
+    else:
+        # Development mode
+        port = DEV_PORT
+        host = "127.0.0.1"
+        debug = DEBUG_MODE
+
+    app.run(host=host, port=port, debug=debug)

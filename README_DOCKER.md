@@ -91,7 +91,7 @@ server_name yourdomain.com;
 ```
 
 Then access:
-- **Main App:** `http://yourdomain.com`
+- **Main App:** `http://dc-project.com.com`
 - **API Base:** `http://yourdomain.com/api`
 
 ## SSL/HTTPS Setup
