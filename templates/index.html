@@ -804,6 +804,7 @@
             Import
           </button>
           <button onclick="exportCsv()">Export</button>
+          <button id="groupReelBtn" onclick="toggleGroupByReel()">Group by Reel</button>
           <button onclick="openFilterModal()">🔍 Filter</button>
         </div>
 
@@ -1057,7 +1058,15 @@
         </div>
         <div class="form-group">
           <label>Version</label>
-          <input type="text" id="filterVersion" placeholder="e.g., V001" />
+          <select id="filterVersion">
+            <option value="">— All —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Reel</label>
+          <select id="filterReel">
+            <option value="">— All —</option>
+          </select>
         </div>
         <div class="form-group">
           <label>Assigned To</label>
@@ -1082,6 +1091,7 @@
       let currentPreviewType = "plate"; // track preview type
       let allShots = []; // store all shots for filtering
       let currentFilters = { code: "", version: "", assigned_to: "" };
+      let groupByReel = false; // toggle grouping view
 
       // helper to safely embed single-quoted strings inside generated HTML attributes
       function esc(s) {
@@ -1342,14 +1352,39 @@
       }
 
       function populateFilterDropdowns(shots) {
+        // Assigned artists
         const select = document.getElementById("filterAssigned");
-        if (!select) return;
-        const artists = new Set();
-        shots.forEach((s) => {
-          if (s.assigned_to) artists.add(s.assigned_to);
-        });
-        const opts = Array.from(artists).sort();
-        select.innerHTML = '<option value="">— All —</option>' + opts.map((a) => `<option value="${a}">${a}</option>`).join("");
+        if (select) {
+          const artists = new Set();
+          shots.forEach((s) => {
+            if (s.assigned_to) artists.add(s.assigned_to);
+          });
+          const opts = Array.from(artists).sort();
+          select.innerHTML = '<option value="">— All —</option>' + opts.map((a) => `<option value="${a}">${a}</option>`).join("");
+        }
+
+        // Versions
+        const vsel = document.getElementById("filterVersion");
+        if (vsel) {
+          const versions = new Set();
+          shots.forEach((s) => {
+            if (s.version) versions.add(s.version);
+          });
+          const vopts = Array.from(versions).sort();
+          vsel.innerHTML = '<option value="">— All —</option>' + vopts.map((v) => `<option value="${v}">${v}</option>`).join("");
+        }
+
+        // Reels (extracted from shot.code)
+        const rsel = document.getElementById("filterReel");
+        if (rsel) {
+          const reels = new Set();
+          shots.forEach((s) => {
+            const parts = (s.code || "").split("_");
+            if (parts.length >= 2 && parts[1]) reels.add(parts[1]);
+          });
+          const ropts = Array.from(reels).sort();
+          rsel.innerHTML = '<option value="">— All —</option>' + ropts.map((r) => `<option value="${r}">${r}</option>`).join("");
+        }
       }
 
       function openFilterModal() {
@@ -1359,25 +1394,61 @@
         }
         document.getElementById("filterMsg").textContent = "";
         document.getElementById("filterCode").value = currentFilters.code;
-        document.getElementById("filterVersion").value = currentFilters.version;
+        const vsel = document.getElementById("filterVersion");
+        if (vsel) {
+          // try case-insensitive match to restore previous selection
+          const cv = currentFilters.version || "";
+          if (cv) {
+            const opt = Array.from(vsel.options).find(o => (o.value||"").toLowerCase() === cv.toLowerCase());
+            if (opt) vsel.value = opt.value;
+            else vsel.value = "";
+          } else {
+            vsel.value = "";
+          }
+        }
+        const rsel = document.getElementById("filterReel");
+        if (rsel) {
+          const cr = currentFilters.reel || "";
+          if (cr) {
+            const ropt = Array.from(rsel.options).find(o => (o.value||"") === cr);
+            if (ropt) rsel.value = ropt.value;
+            else rsel.value = "";
+          } else {
+            rsel.value = "";
+          }
+        }
         document.getElementById("filterAssigned").value = currentFilters.assigned_to;
         document.getElementById("filterModal").classList.add("open");
+      }
+
+      function getFilteredShots() {
+        const code = (currentFilters.code || "").trim().toLowerCase();
+        const version = (currentFilters.version || "").trim().toLowerCase();
+        const reel = (currentFilters.reel || "").trim();
+        const assigned_to = (currentFilters.assigned_to || "").trim();
+
+        return allShots.filter((s) => {
+          if (code && !(s.code || "").toLowerCase().includes(code)) return false;
+          if (version && !((s.version || "").toLowerCase().includes(version))) return false;
+          if (assigned_to && s.assigned_to !== assigned_to) return false;
+          if (reel) {
+            const parts = (s.code || "").split("_");
+            const r = parts.length >= 2 ? parts[1] : "";
+            if (r !== reel) return false;
+          }
+          return true;
+        });
       }
 
       function applyFilters() {
         const code = document.getElementById("filterCode").value.trim().toLowerCase();
         const version = document.getElementById("filterVersion").value.trim().toLowerCase();
+        const reel = document.getElementById("filterReel").value.trim();
         const assigned_to = document.getElementById("filterAssigned").value.trim();
 
-        currentFilters = { code, version, assigned_to };
+        currentFilters = { code, version, assigned_to, reel };
 
-        const filtered = allShots.filter((s) => {
-          if (code && !s.code.toLowerCase().includes(code)) return false;
-          if (version && !(s.version || "").toLowerCase().includes(version)) return false;
-          if (assigned_to && s.assigned_to !== assigned_to) return false;
-          return true;
-        });
-
+        const filtered = getFilteredShots();
         renderShotsTable(filtered);
         closeModal("filterModal");
         showMsg("filterMsg", `Showing ${filtered.length} of ${allShots.length} shots`, "success");
@@ -1385,11 +1456,24 @@
 
       function clearFilters() {
         document.getElementById("filterCode").value = "";
-        document.getElementById("filterVersion").value = "";
+        const vsel = document.getElementById("filterVersion"); if (vsel) vsel.value = "";
+        const rsel = document.getElementById("filterReel"); if (rsel) rsel.value = "";
         document.getElementById("filterAssigned").value = "";
-        currentFilters = { code: "", version: "", assigned_to: "" };
+        currentFilters = { code: "", version: "", assigned_to: "", reel: "" };
         renderShotsTable(allShots);
         closeModal("filterModal");
+      }
+
+      function toggleGroupByReel() {
+        groupByReel = !groupByReel;
+        const btn = document.getElementById('groupReelBtn');
+        if (btn) {
+          btn.textContent = groupByReel ? 'Ungroup' : 'Group by Reel';
+          if (groupByReel) btn.classList.add('active'); else btn.classList.remove('active');
+        }
+        // re-render using current filters
+        const shots = getFilteredShots();
+        renderShotsTable(shots);
       }
 
       function renderShotsTable(shots) {
@@ -1400,6 +1484,58 @@
           return;
         }
 
+        // If grouping is enabled, group by reel (extracted from code after underscore)
+        if (groupByReel) {
+          // build groups
+          const groups = {};
+          shots.forEach((s) => {
+            const parts = (s.code || "").split("_");
+            const reel = parts.length >= 2 && parts[1] ? parts[1] : '—';
+            if (!groups[reel]) groups[reel] = [];
+            groups[reel].push(s);
+          });
+
+          let html = '';
+          const reels = Object.keys(groups).sort();
+          reels.forEach((r) => {
+            html += `<div style="margin-bottom:12px;">
+                <div style="padding:6px 10px; background:#0a1f35; color:#9fb6ff; font-weight:700; border-radius:6px; margin-bottom:6px;">Reel: ${r} (${groups[r].length})</div>`;
+
+            html += `<table class="shots-table" style="margin-bottom:8px;">
+                <thead>
+                  <tr>
+                    <th>Shot Code</th>
+                    <th>Status</th>
+                    <th>Assigned</th>
+                    <th>Version</th>
+                  </tr>
+                </thead>
+                <tbody>`;
+
+            groups[r].forEach((s) => {
+              const color = getStatusColor(s.status);
+              const version = s.version || "-";
+              const status = s.status || "-";
+              html += `
+                  <tr data-id="${s.id}" onclick="selectShot(${s.id}, this)"
+                      style="border-left: 3px solid ${color}; background-color: ${color}20;">
+                    <td><strong>${s.code}</strong></td>
+                    <td>
+                      <span style="background:${color}; color:#fff; padding:2px 6px; border-radius:12px; font-size:10px;">${status}</span>
+                    </td>
+                    <td>${s.assigned_to || "-"}</td>
+                    <td>${version}</td>
+                  </tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+          });
+
+          container.innerHTML = html;
+          return;
+        }
+
+        // default (ungrouped) view
         let html = `
     <table class="shots-table">
       <thead>
