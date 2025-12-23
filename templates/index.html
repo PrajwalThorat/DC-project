@@ -1709,6 +1709,9 @@
               <div><strong>EXR:</strong> ${shot.exr_path ? "✓" : "-"}</div>
               <div><strong>Comp:</strong> ${shot.comp ? "✓" : "-"}</div>
             </div>
+            <div style="margin-top:10px">
+              <button class="btn-submit" onclick="generateShotStructure()">Generate</button>
+            </div>
           `;
 
           // Update preview buttons states
@@ -2118,6 +2121,30 @@
           setTimeout(() => closeModal("createUserModal"), 1500);
         } catch (e) {
           showMsg("createUserMsg", "Error: " + e.message, "error");
+        }
+      }
+
+      async function generateShotStructure() {
+        if (!currentShotId) { alert('Select a shot'); return; }
+        if (!confirm('Generate comp structure for this shot under Project -> Comps ?')) return;
+        try {
+          const res = await fetch(`/api/shots/${currentShotId}/generate_structure`, {
+            method: 'POST'
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert('Failed: ' + (data.error || JSON.stringify(data)));
+            return;
+          }
+          if (data.created && data.created.length) {
+            alert('Created:\n' + data.created.join('\n'));
+          } else if (data.errors && data.errors.length) {
+            alert('Errors:\n' + JSON.stringify(data.errors));
+          } else {
+            alert('No folders created');
+          }
+        } catch (e) {
+          alert('Error: ' + e.message);
         }
       }
 

@@ -24,6 +24,27 @@ app = Flask(
     template_folder=str(BASE_DIR / "templates")
 )
 
+# Base path on server where project folders should be created. Can be set via env var `DC_PROJECTS_ROOT` or `PROJECT_ROOT`.
+_env_root = os.environ.get("DC_PROJECTS_ROOT") or os.environ.get("PROJECT_ROOT")
+# Preferred network path (Windows UNC). We'll attempt a few variants and pick the first that exists.
+_unc_win = r"\\169.254.8.57\Data"
+_unc_posix = "//169.254.8.57/Data"
+_local_default = str(BASE_DIR / "projects")
+
+PROJECT_ROOT = None
+for _candidate in filter(None, [_env_root, _unc_win, _unc_posix, _local_default]):
+    try:
+        if os.path.exists(_candidate):
+            PROJECT_ROOT = _candidate
+            break
+    except Exception:
+        continue
+
+if not PROJECT_ROOT:
+    # If nothing exists, prefer env value if provided, otherwise fall back to UNC (as requested) then local
+    PROJECT_ROOT = _env_root or _unc_win or _local_default
+
+
 # Configuration from environment
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
 DEBUG_MODE = os.environ.get("DEBUG", "True").lower() == "true"
@@ -282,6 +303,37 @@ def api_projects():
     p = Project(name=name, short=short, start_date=start_date, folder_path=folder_path, details_text=details_text)
     db.session.add(p)
     db.session.commit()
+    # If folder_path not supplied, build one using PROJECT_ROOT and project short/code
+    try:
+        if not folder_path:
+            safe_short = (short or name or f"project_{p.id}").replace(' ', '_')
+            project_dir = os.path.join(PROJECT_ROOT, safe_short)
+            os.makedirs(project_dir, exist_ok=True)
+            # create standard subfolders
+            subfolders = [
+                "Annotation",
+                "Assets",
+                "Comps",
+                "From Client",
+                "Plates",
+                "Render",
+                "Send to client template",
+            ]
+            for sf in subfolders:
+                try:
+                    os.makedirs(os.path.join(project_dir, sf), exist_ok=True)
+                except Exception:
+                    pass
+            p.folder_path = project_dir
+            db.session.commit()
+        else:
+            # ensure provided path exists
+            try:
+                os.makedirs(folder_path, exist_ok=True)
+            except Exception:
+                pass
+    except Exception as e:
+        app.logger.exception(f"Failed to create project folders: {e}")
     return jsonify(p.to_dict()), 201
 
 
@@ -634,6 +686,92 @@ def api_generate_comp(shot_id):
     except Exception as e:
         app.logger.exception("generate_comp failed")
         return jsonify({"error": "could not create nuke file", "detail": str(e)}), 500
+
+
+@app.route("/api/shots/<int:shot_id>/create_folders", methods=["POST"])
+def api_shot_create_folders(shot_id):
+    """Create a set of folders for a shot. Accepts JSON {"names": ["A","B"]} or uses defaults."""
+    s = Shot.query.get_or_404(shot_id)
+    proj = Project.query.get(s.project_id)
+    if not proj or not proj.folder_path:
+        return jsonify({"error": "project folder_path not configured"}), 400
+
+    data = {}
+    if request.is_json:
+        data = request.get_json() or {}
+    names = data.get("names") or []
+    # default shot folders
+    if not names:
+        names = ["Plates", "Comp", "Render", "Assets", "Deliverables"]
+
+    created = []
+    errors = []
+    shot_folder_name = s.code or f"shot_{s.id}"
+    # create folders under project folder -> Shots -> <shot_code> -> <name>
+    shots_base = os.path.join(proj.folder_path, "Shots")
+    for nm in names:
+        try:
+            target = os.path.join(shots_base, shot_folder_name, nm)
+            os.makedirs(target, exist_ok=True)
+            created.append(target)
+        except Exception as e:
+            errors.append({"name": nm, "error": str(e)})
+
+    return jsonify({"created": created, "errors": errors})
+
+
+@app.route("/api/shots/<int:shot_id>/generate_structure", methods=["POST"])
+def api_shot_generate_structure(shot_id):
+    """Create standard comp structure for a shot inside the project's Comps/<reel>/<shot_code>/ folder.
+
+    Creates: Annotations, CG Assets, comp, DeNoise, MM, Paint, precomp, Roto
+    """
+    s = Shot.query.get_or_404(shot_id)
+    proj = Project.query.get(s.project_id)
+    if not proj or not proj.folder_path:
+        return jsonify({"error": "project folder_path not configured"}), 400
+
+    # Determine reel from shot code (second segment after underscore)
+    parts = (s.code or "").split("_")
+    raw_reel = parts[1] if len(parts) >= 2 and parts[1] else "01"
+    # Normalize reel folder name: prefix with 'Reel_' unless already contains 'reel'
+    if isinstance(raw_reel, str) and raw_reel.strip():
+        rr = raw_reel.strip()
+    else:
+        rr = "01"
+    if rr.lower().startswith("reel"):
+        reel_folder_name = rr
+    else:
+        reel_folder_name = f"Reel_{rr}"
+
+    shot_folder = s.code or f"shot_{s.id}"
+
+    comp_base = os.path.join(proj.folder_path, "Comps")
+    reel_dir = os.path.join(comp_base, reel_folder_name)
+    shot_dir = os.path.join(reel_dir, shot_folder)
+
+    subfolders = ["Annotations", "CG Assets", "comp", "DeNoise", "MM", "Paint", "precomp", "Roto"]
+
+    created = []
+    errors = []
+    try:
+        for p in [comp_base, reel_dir, shot_dir]:
+            try:
+                os.makedirs(p, exist_ok=True)
+            except Exception as e:
+                errors.append({"path": p, "error": str(e)})
+        for sf in subfolders:
+            try:
+                target = os.path.join(shot_dir, sf)
+                os.makedirs(target, exist_ok=True)
+                created.append(target)
+            except Exception as e:
+                errors.append({"name": sf, "error": str(e)})
+    except Exception as e:
+        app.logger.exception("generate_structure failed")
+        return jsonify({"error": "failed", "detail": str(e)}), 500
+
+    return jsonify({"created": created, "errors": errors})
 
 
 @app.route("/api/shots/<int:shot_id>/send_to_client", methods=["POST"])
