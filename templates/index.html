@@ -816,7 +816,7 @@
           >
             Import
           </button>
-          <button onclick="exportCsv()">Export</button>
+          <button id="exportBtn" onclick="exportCsv()">Export</button>
           <button id="groupReelBtn" onclick="toggleGrouping()">🔄 Group by Reel</button>
           <select id="groupReelSelect" style="display:none; padding:6px 10px; border-radius:4px; background:#0f3460; color:#eee; border:1px solid #333; font-size:12px;" onchange="onSelectReel()">
             <option value="">— All —</option>
@@ -1270,8 +1270,9 @@
             "userLabel"
           ).textContent = `${sess.username} (${sess.role})`;
 
-          // Show Users menu only for admins
+          // Role-based UI adjustments
           if (currentUser.role === "admin") {
+            // full access
             document.getElementById("usersMenuBtn").style.display = "block";
             document.getElementById("addProjectBtn").style.display =
               "inline-block";
@@ -1279,12 +1280,27 @@
               "inline-block";
             document.getElementById("importShotsBtn").style.display =
               "inline-block";
+            document.getElementById("exportBtn").style.display = "inline-block";
             document.getElementById("topAssign").style.display = "block";
             document.getElementById("assignDisplay").style.display = "none";
+          } else if (currentUser.role === "artist") {
+            // Artists: can assign and use filter/group/generate, but no create/import/export/edit/delete
+            document.getElementById("usersMenuBtn").style.display = "none";
+            document.getElementById("addProjectBtn").style.display = "none";
+            document.getElementById("addShotBtn").style.display = "none";
+            document.getElementById("importShotsBtn").style.display = "none";
+            document.getElementById("exportBtn").style.display = "none";
+            document.getElementById("topAssign").style.display = "block";
+            document.getElementById("assignDisplay").style.display = "none";
+            // hide edit/delete buttons across the UI
+            document.querySelectorAll('.btn-edit, .btn-delete').forEach(b=>{ b.style.display = 'none'; });
           } else {
+            // default: limited view (view-only assignment display)
             document.getElementById("topAssign").style.display = "none";
             document.getElementById("assignDisplay").style.display =
               "inline-block";
+            // ensure export visible for non-artist non-admin roles
+            document.getElementById("exportBtn").style.display = "inline-block";
           }
 
           // Restore menu state
@@ -1310,7 +1326,37 @@
           });
           const grid = document.getElementById("projectsList");
           grid.innerHTML = "";
-          projects.forEach((p) => {
+
+          let visibleProjects = projects;
+          // If artist, only show projects that have shots assigned to them
+          if (currentUser && currentUser.role === 'artist') {
+            const uname = (currentUser.username || '').toLowerCase();
+            const filtered = [];
+            for (const p of projects) {
+              try {
+                const shots = await fetch(`/api/projects/${p.id}/shots`).then(r => {
+                  if (!r.ok) return [];
+                  return r.json();
+                });
+                const assigned = shots.filter(s => (s.assigned_to || '').toLowerCase() === uname);
+                if (assigned.length) {
+                  // attach the artist-only shots to the project for quicker rendering
+                  p._assignedShots = assigned;
+                  filtered.push(p);
+                }
+              } catch (e) {
+                console.warn('Failed to load shots for project', p.id, e);
+              }
+            }
+            visibleProjects = filtered;
+          }
+
+          if (!visibleProjects.length) {
+            grid.innerHTML = '<div class="empty-state">No projects with assigned shots</div>';
+            return;
+          }
+
+          visibleProjects.forEach((p) => {
             const card = document.createElement("div");
             card.className = "project-card";
             card.dataset.id = p.id;
@@ -1337,7 +1383,15 @@
         const sel = document.querySelector(`[data-id="${projectId}"]`);
         if (sel) sel.classList.add("active");
         document.getElementById("shotsControls").style.display = "flex";
-        await loadShots(projectId);
+        // If we pre-fetched assigned shots for an artist, use them to avoid extra API call
+        if (projectData && projectData._assignedShots && currentUser && currentUser.role === 'artist') {
+          allShots = projectData._assignedShots;
+          currentFilters = { code: "", version: "", assigned_to: "" };
+          populateFilterDropdowns(allShots);
+          renderShotsTable(allShots);
+        } else {
+          await loadShots(projectId);
+        }
         currentShotId = null;
         document.getElementById("shotTopbar").classList.remove("show");
         document.getElementById("shotDetails").innerHTML =
@@ -1358,8 +1412,22 @@
           console.log("Shots loaded:", shots);
           allShots = shots; // store for filtering
           currentFilters = { code: "", version: "", assigned_to: "" }; // reset filters
-          renderShotsTable(shots);
-          populateFilterDropdowns(shots);
+
+          // If current user is an artist, show only shots assigned to them
+          let visibleShots = shots;
+          if (currentUser && currentUser.role === 'artist') {
+            const uname = (currentUser.username || '').toLowerCase();
+            visibleShots = shots.filter(s => ((s.assigned_to || '').toLowerCase() === uname));
+            populateFilterDropdowns(visibleShots);
+            if (!visibleShots.length) {
+              document.getElementById('shotsContainer').innerHTML = '<div class="empty-state">You don\'t have work — enjoy!</div>';
+              return;
+            }
+          } else {
+            populateFilterDropdowns(shots);
+          }
+
+          renderShotsTable(visibleShots);
         } catch (e) {
           console.error("Error loading shots:", e);
           document.getElementById("shotsContainer").innerHTML =
