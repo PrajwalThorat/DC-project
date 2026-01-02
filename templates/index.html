@@ -218,6 +218,73 @@
         display: block;
         margin-bottom: 2px;
       }
+      .project-card-menu {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: none;
+      }
+      .project-card:hover .project-card-menu {
+        display: block;
+      }
+      .menu-dots-btn {
+        background: rgba(102, 126, 234, 0.3);
+        color: #667eea;
+        border: 1px solid #667eea;
+        padding: 4px 6px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      }
+      .menu-dots-btn:hover {
+        background: rgba(102, 126, 234, 0.5);
+      }
+      .project-card-dropdown {
+        position: absolute;
+        top: 32px;
+        right: 0;
+        background: #0f3460;
+        border: 1px solid #667eea;
+        border-radius: 4px;
+        min-width: 120px;
+        z-index: 100;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        display: none;
+      }
+      .project-card-dropdown.show {
+        display: block;
+      }
+      .project-card-dropdown button {
+        width: 100%;
+        padding: 8px 12px;
+        background: none;
+        border: none;
+        color: #eee;
+        text-align: left;
+        cursor: pointer;
+        font-size: 12px;
+        transition: background 0.2s;
+        border-bottom: 1px solid #1a5a7a;
+      }
+      .project-card-dropdown button:last-child {
+        border-bottom: none;
+      }
+      .project-card-dropdown button:hover {
+        background: rgba(102, 126, 234, 0.2);
+      }
+      .project-card-dropdown .btn-delete {
+        color: #e74c3c;
+      }
+      .project-card-dropdown .btn-delete:hover {
+        background: rgba(231, 76, 60, 0.2);
+      }
 
       .panel-shots {
         width: 450px;
@@ -1255,6 +1322,37 @@
         }
       }
 
+      function toggleProjectMenu(event) {
+        const dropdown = event.target.closest('.project-card-menu').querySelector('.project-card-dropdown');
+        dropdown.classList.toggle('show');
+        event.stopPropagation();
+      }
+
+      function editProjectClick(projectId) {
+        alert("Edit feature coming soon for project " + projectId);
+      }
+
+      async function deleteProjectClick(projectId) {
+        if (!confirm("Delete this project?")) return;
+        try {
+          const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+          if (!res.ok) throw new Error(await res.text());
+          if (currentProjectId === projectId) {
+            currentProjectId = null;
+            document.getElementById("shotDetails").innerHTML = '<div class="empty-state">Select a shot</div>';
+            document.getElementById("commentsList").innerHTML = "";
+            document.getElementById("detailsActions").style.display = "none";
+          }
+          await loadProjects();
+        } catch (e) {
+          alert("Error: " + e.message);
+        }
+      }
+
+      document.addEventListener('click', () => {
+        document.querySelectorAll('.project-card-dropdown').forEach(d => d.classList.remove('show'));
+      });
+
       async function initApp() {
         try {
           const sess = await fetch("/api/session").then((r) => {
@@ -1360,14 +1458,22 @@
             const card = document.createElement("div");
             card.className = "project-card";
             card.dataset.id = p.id;
-            card.onclick = () => selectProject(p.id, p);
+            card.style.position = "relative";
             card.innerHTML = `
             <div class="project-card-name">${p.name}</div>
             <div class="project-card-meta">
               <span><strong>Code:</strong> ${p.short || "-"}</span>
               <span><strong>Start:</strong> ${p.start_date || "-"}</span>
             </div>
+            <div class="project-card-menu">
+              <button class="menu-dots-btn" onclick="event.stopPropagation(); toggleProjectMenu(event)">⋯</button>
+              <div class="project-card-dropdown">
+                <button onclick="event.stopPropagation(); editProjectClick(${p.id})">Edit</button>
+                <button class="btn-delete" onclick="event.stopPropagation(); deleteProjectClick(${p.id})">Delete</button>
+              </div>
+            </div>
           `;
+            card.onclick = () => selectProject(p.id, p);
             grid.appendChild(card);
           });
         } catch (e) {
