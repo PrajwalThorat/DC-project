@@ -790,6 +790,36 @@
         border-radius: 4px;
         margin-bottom: 10px;
       }
+
+      /* New styles for shot filters and grouping */
+      .controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .controls input,
+      .controls select {
+        padding: 6px;
+        background: #0f3460;
+        color: #eee;
+        border: 1px solid #333;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      .controls button {
+        padding: 6px 12px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .controls button:hover {
+        background: #764ba2;
+      }
     </style>
   </head>
   <body>
@@ -883,6 +913,7 @@
           >
             Import
           </button>
+          <button id="deleteSelectedBtn" onclick="deleteSelectedShots()" style="display:none; background:#b23131; color:#fff;">Delete Selected</button>
           <button id="exportBtn" onclick="exportCsv()">Export</button>
           <button id="groupReelBtn" onclick="toggleGrouping()">🔄 Group by Reel</button>
           <select id="groupReelSelect" style="display:none; padding:6px 10px; border-radius:4px; background:#0f3460; color:#eee; border:1px solid #333; font-size:12px;" onchange="onSelectReel()">
@@ -1010,6 +1041,9 @@
         <div id="shotMsg"></div>
         <div class="form-group">
           <label>Shot Code *</label><input type="text" id="shotCode" />
+        </div>
+        <div class="form-group">
+          <label>Reel</label><input type="text" id="shotReel" />
         </div>
         <div class="form-group">
           <label>Description</label><input type="text" id="shotDesc" />
@@ -1168,6 +1202,8 @@
       let currentProjectId = null;
       let currentShotId = null;
       let editingShotId = null;
+      let editingProjectId = null;
+      let editingUserId = null;
       let currentUser = null;
       let allUsers = [];
       let currentView = "projects";
@@ -1273,6 +1309,7 @@
               <p>Role: <strong>${u.role}</strong></p>
             </div>
             <div class="user-actions">
+              <button class="btn-edit" onclick="editUserClick(${u.id})">✏️ Edit</button>
               <button class="btn-reset" onclick="resetUserPassword(${u.id}, '${
               u.username
             }')">🔑 Reset Pwd</button>
@@ -1328,8 +1365,26 @@
         event.stopPropagation();
       }
 
-      function editProjectClick(projectId) {
-        alert("Edit feature coming soon for project " + projectId);
+      async function editProjectClick(projectId) {
+        try {
+          // fetch projects and find the one we need
+          const projects = await fetch('/api/projects').then(r=>{ if(!r.ok) throw new Error('Failed'); return r.json(); });
+          const p = projects.find(x=>x.id===projectId);
+          if (!p) throw new Error('Project not found');
+          // populate modal
+          editingProjectId = projectId;
+          document.getElementById('projName').value = p.name || '';
+          document.getElementById('projCode').value = p.short || '';
+          document.getElementById('projStart').value = p.start_date || '';
+          document.getElementById('projFolder').value = p.folder_path || '';
+          document.getElementById('projDetails').value = p.details_text || '';
+          document.querySelector('#projectModal .modal-header h2').textContent = 'Edit Project';
+          // change button text
+          const btn = document.querySelector('#projectModal .btn-submit'); if (btn) btn.textContent = 'Save';
+          document.getElementById('projectModal').classList.add('open');
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
       }
 
       async function deleteProjectClick(projectId) {
@@ -1565,23 +1620,23 @@
         }
 
         // Reels (extracted from shot.code)
-        const rsel = document.getElementById("filterReel");
-        if (rsel) {
-          const reels = new Set();
-          shots.forEach((s) => {
-            const parts = (s.code || "").split("_");
-            if (parts.length >= 2 && parts[1]) reels.add(parts[1]);
-          });
-          const ropts = Array.from(reels).sort();
-          rsel.innerHTML = '<option value="">— All —</option>' + ropts.map((r) => `<option value="${r}">${r}</option>`).join("");
-        
-          // Group-by-Reel select (populate when shots load)
-          const gres = document.getElementById('groupReelSelect');
-          if (gres) {
-            const ropts2 = Array.from(reels).sort();
-            gres.innerHTML = '<option value="">— All —</option>' + ropts2.map((r) => `<option value="${r}">${r}</option>`).join('');
+          const rsel = document.getElementById("filterReel");
+          if (rsel) {
+            const reels = new Set();
+            shots.forEach((s) => {
+              const r = (s.reel && s.reel.trim()) ? s.reel : ((s.code || "").split("_")[1] || "");
+              if (r) reels.add(r);
+            });
+            const ropts = Array.from(reels).sort();
+            rsel.innerHTML = '<option value="">— All —</option>' + ropts.map((r) => `<option value="${r}">${r}</option>`).join("");
+
+            // Group-by-Reel select (populate when shots load)
+            const gres = document.getElementById('groupReelSelect');
+            if (gres) {
+              const ropts2 = Array.from(reels).sort();
+              gres.innerHTML = '<option value="">— All —</option>' + ropts2.map((r) => `<option value="${r}">${r}</option>`).join('');
+            }
           }
-        }
       }
 
       function openReelModal() {
@@ -1643,8 +1698,7 @@
           if (version && !((s.version || "").toLowerCase().includes(version))) return false;
           if (assigned_to && s.assigned_to !== assigned_to) return false;
           if (reel) {
-            const parts = (s.code || "").split("_");
-            const r = parts.length >= 2 ? parts[1] : "";
+            const r = (s.reel && s.reel.trim()) ? s.reel : ((s.code || "").split("_")[1] || "");
             if (r !== reel) return false;
           }
           return true;
@@ -1729,13 +1783,12 @@
           return;
         }
 
-        // If grouping is enabled, group by reel (extracted from code after underscore)
+          // If grouping is enabled, group by reel (prefer stored `reel`, fallback to code)
         if (groupByReel) {
           // build groups
           const groups = {};
           shots.forEach((s) => {
-            const parts = (s.code || "").split("_");
-            const reel = parts.length >= 2 && parts[1] ? parts[1] : '—';
+            const reel = (s.reel && s.reel.trim()) ? s.reel : ((s.code || "").split("_")[1] || '—');
             if (!groups[reel]) groups[reel] = [];
             groups[reel].push(s);
           });
@@ -1749,6 +1802,7 @@
             html += `<table class="shots-table" style="margin-bottom:8px;">
                 <thead>
                   <tr>
+                    <th style="width:36px"><input type="checkbox" id="selectAllReel_${r}" onchange="toggleSelectAll('${r}', this)" /></th>
                     <th>Shot Code</th>
                     <th>Status</th>
                     <th>Assigned</th>
@@ -1762,9 +1816,9 @@
               const version = s.version || "-";
               const status = s.status || "-";
               html += `
-                  <tr data-id="${s.id}" onclick="selectShot(${s.id}, this)"
-                      style="border-left: 3px solid ${color}; background-color: ${color}20;">
-                    <td><strong>${s.code}</strong></td>
+                  <tr data-id="${s.id}" style="border-left: 3px solid ${color}; background-color: ${color}20;">
+                    <td style="text-align:center"><input type="checkbox" class="shot-select" data-id="${s.id}" onclick="event.stopPropagation();" /></td>
+                    <td onclick="selectShot(${s.id}, this.closest('tr'))"><strong>${s.code}</strong></td>
                     <td>
                       <span style="background:${color}; color:#fff; padding:2px 6px; border-radius:12px; font-size:10px;">${status}</span>
                     </td>
@@ -1785,6 +1839,7 @@
     <table class="shots-table">
       <thead>
         <tr>
+          <th style="width:36px"><input type="checkbox" id="selectAllShots" onchange="toggleSelectAll(null, this)" /></th>
           <th>Shot Code</th>
           <th>Status</th>
           <th>Assigned</th>
@@ -1800,9 +1855,9 @@
           const status = s.status || "-";
 
           html += `
-      <tr data-id="${s.id}" onclick="selectShot(${s.id}, this)"
-          style="border-left: 3px solid ${color}; background-color: ${color}20;">
-        <td><strong>${s.code}</strong></td>
+      <tr data-id="${s.id}" style="border-left: 3px solid ${color}; background-color: ${color}20;">
+        <td style="text-align:center"><input type="checkbox" class="shot-select" data-id="${s.id}" onclick="event.stopPropagation();" /></td>
+        <td onclick="selectShot(${s.id}, this.closest('tr'))"><strong>${s.code}</strong></td>
         <td>
           <span style="
             background:${color};
@@ -1872,6 +1927,7 @@
               ${shot.code}
             </h4>
             <div class="shot-meta">
+              <div><strong>Reel:</strong> ${shot.reel || "-"}</div>
               <div><strong>Version:</strong> ${shot.version || "-"}</div>
               <div><strong>Start Date:</strong> ${shot.start_date || "-"}</div>
               <div><strong>Due Date:</strong> ${shot.due_date || "-"}</div>
@@ -1908,6 +1964,43 @@
         } catch (e) {
           console.error("Error loading shot:", e);
           alert("Error: " + e.message);
+        }
+      }
+
+      function toggleSelectAll(group, checkbox) {
+        // group = reel value when grouping, or null for ungrouped
+        if (group) {
+          // select checkboxes within that group's table
+          const table = document.querySelector(`#shotsContainer table[style*='Reel: ${group}']`) || document;
+          table.querySelectorAll(`.shot-select`).forEach(cb => { cb.checked = checkbox.checked; });
+        } else {
+          document.querySelectorAll(`#shotsContainer .shot-select`).forEach(cb => { cb.checked = checkbox.checked; });
+        }
+        // show/hide delete button
+        const any = Array.from(document.querySelectorAll('#shotsContainer .shot-select')).some(c=>c.checked);
+        const btn = document.getElementById('deleteSelectedBtn');
+        if (btn) btn.style.display = any ? '' : 'none';
+      }
+
+      function getSelectedShotIds() {
+        return Array.from(document.querySelectorAll('#shotsContainer .shot-select:checked')).map(cb => parseInt(cb.dataset.id));
+      }
+
+      async function deleteSelectedShots() {
+        const ids = getSelectedShotIds();
+        if (!ids || !ids.length) { alert('No shots selected'); return; }
+        if (!confirm(`Delete ${ids.length} selected shots? This cannot be undone.`)) return;
+        try {
+          const res = await fetch('/api/shots/bulk_delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ids}) });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data && (data.error||JSON.stringify(data)) || 'Delete failed');
+          showMsg('shotMsg', `Deleted ${data.deleted} shots`, 'success');
+          // refresh
+          await loadShots(currentProjectId);
+          // hide delete button
+          const btn = document.getElementById('deleteSelectedBtn'); if (btn) btn.style.display='none';
+        } catch (e) {
+          alert('Delete failed: ' + e.message);
         }
       }
 
@@ -2104,6 +2197,9 @@
       function openProjectModal() {
         document.getElementById("projectMsg").textContent = "";
         closeForm("projectModal");
+        editingProjectId = null;
+        document.querySelector('#projectModal .modal-header h2').textContent = 'New Project';
+        const btn = document.querySelector('#projectModal .btn-submit'); if (btn) btn.textContent = 'Create';
         document.getElementById("projectModal").classList.add("open");
       }
       function openShotModal() {
@@ -2120,6 +2216,10 @@
       function openCreateUserModal() {
         document.getElementById("createUserMsg").textContent = "";
         closeForm("createUserModal");
+        editingUserId = null;
+        document.getElementById('newUserName').disabled = false;
+        document.querySelector('#createUserModal .modal-header h2').textContent = 'Create User';
+        const btn = document.querySelector('#createUserModal .btn-submit'); if (btn) btn.textContent = 'Create';
         document.getElementById("createUserModal").classList.add("open");
       }
 
@@ -2139,25 +2239,35 @@
           return;
         }
         try {
-          const res = await fetch("/api/projects", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name,
-              short:
-                document.getElementById("projCode").value ||
-                name.substring(0, 3).toUpperCase(),
-              start_date: document.getElementById("projStart").value,
-              folder_path: document.getElementById("projFolder").value,
-              details_text: document.getElementById("projDetails").value,
-            }),
-          });
+          const payload = {
+            name,
+            short: document.getElementById("projCode").value || name.substring(0, 3).toUpperCase(),
+            start_date: document.getElementById("projStart").value,
+            folder_path: document.getElementById("projFolder").value,
+            details_text: document.getElementById("projDetails").value,
+          };
+          let res;
+          if (editingProjectId) {
+            res = await fetch(`/api/projects/${editingProjectId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+          } else {
+            res = await fetch("/api/projects", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+          }
           if (!res.ok) {
             const err = await res.text();
             throw new Error(err);
           }
           closeModal("projectModal");
-          showMsg("projectMsg", "Project created!", "success");
+          showMsg("projectMsg", editingProjectId ? "Project updated!" : "Project created!", "success");
+          editingProjectId = null;
+          const btn = document.querySelector('#projectModal .btn-submit'); if (btn) btn.textContent = 'Create';
           await loadProjects();
         } catch (e) {
           showMsg("projectMsg", "Error: " + e.message, "error");
@@ -2177,6 +2287,7 @@
         try {
           const payload = {
             code,
+            reel: document.getElementById("shotReel").value.trim(),
             description: document.getElementById("shotDesc").value.trim(),
             assigned_to: document.getElementById("shotAssigned").value.trim(),
             start_date: document.getElementById("shotStart").value.trim(),
@@ -2233,6 +2344,7 @@
             return r.json();
           });
           document.getElementById("shotCode").value = shot.code;
+          document.getElementById("shotReel").value = shot.reel || "";
           document.getElementById("shotDesc").value = shot.description || "";
           document.getElementById("shotAssigned").value =
             shot.assigned_to || "";
@@ -2277,24 +2389,57 @@
           return;
         }
         try {
-          const res = await fetch("/api/users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username,
-              password:
-                document.getElementById("newUserPassword").value || "changeme",
-              display_name: document.getElementById("newUserDisplay").value,
-              role: document.getElementById("newUserRole").value,
-            }),
-          });
+          const payload = {
+            username,
+            password: document.getElementById("newUserPassword").value || undefined,
+            display_name: document.getElementById("newUserDisplay").value,
+            role: document.getElementById("newUserRole").value,
+          };
+          let res;
+          if (editingUserId) {
+            // update existing user (admin only)
+            const body = {};
+            if (payload.password) body.password = payload.password;
+            if (payload.display_name) body.display_name = payload.display_name;
+            if (payload.role) body.role = payload.role;
+            res = await fetch(`/api/users/${editingUserId}`, {
+              method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+            });
+          } else {
+            res = await fetch('/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password: payload.password || 'changeme', display_name: payload.display_name, role: payload.role }) });
+          }
           if (!res.ok) throw new Error(await res.text());
-          showMsg("createUserMsg", "User created!", "success");
+          showMsg('createUserMsg', editingUserId ? 'User updated!' : 'User created!', 'success');
           await loadUsers();
           await loadUsersList();
-          setTimeout(() => closeModal("createUserModal"), 1500);
+          setTimeout(() => { closeModal('createUserModal'); editingUserId = null; const btn = document.querySelector('#createUserModal .btn-submit'); if (btn) btn.textContent = 'Create'; document.getElementById('newUserName').disabled = false; }, 1200);
         } catch (e) {
           showMsg("createUserMsg", "Error: " + e.message, "error");
+        }
+      }
+
+      async function editUserClick(userId) {
+        try {
+          // ensure users are loaded
+          if (!allUsers || !allUsers.length) await loadUsers();
+          let u = (allUsers || []).find(x => x.id === userId);
+          if (!u) {
+            // fallback fetch
+            const users = await fetch('/api/users').then(r=>{ if(!r.ok) throw new Error('Failed'); return r.json(); });
+            u = users.find(x=>x.id===userId);
+          }
+          if (!u) throw new Error('User not found');
+          editingUserId = userId;
+          document.getElementById('newUserName').value = u.username || '';
+          document.getElementById('newUserName').disabled = true;
+          document.getElementById('newUserPassword').value = '';
+          document.getElementById('newUserDisplay').value = u.display_name || '';
+          document.getElementById('newUserRole').value = u.role || 'artist';
+          document.querySelector('#createUserModal .modal-header h2').textContent = 'Edit User';
+          const btn = document.querySelector('#createUserModal .btn-submit'); if (btn) btn.textContent = 'Save';
+          document.getElementById('createUserModal').classList.add('open');
+        } catch (e) {
+          alert('Error: ' + e.message);
         }
       }
 
@@ -2393,10 +2538,15 @@
             return;
           }
           const count = data.imported || 0;
-          showMsg("importMsg", `Imported ${count} shots!`, "success");
+          let msg = `Imported ${count} shots!`;
           if (data.errors && data.errors.length) {
+            const dupErrors = data.errors.filter(e => e.error && e.error.includes('Skipped duplicate'));
+            if (dupErrors.length) {
+              msg += ` (${dupErrors.length} duplicates skipped)`;
+            }
             console.warn("Import errors:", data.errors);
           }
+          showMsg("importMsg", msg, "success");
           setTimeout(() => {
             closeModal("importModal");
             loadShots(currentProjectId);

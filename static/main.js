@@ -236,7 +236,7 @@ function syncLegendUI() {
   });
 }
 
-async function loadShots() {
+async function loadShots(queryString = '') {
   if (!currentProjectId) return;
   const qs = new URLSearchParams();
   const reel = (document.getElementById("filterReel") && document.getElementById("filterReel").value||"").trim();
@@ -254,7 +254,13 @@ async function loadShots() {
   const url = `/api/projects/${currentProjectId}/shots` + (qs.toString() ? "?" + qs.toString() : "");
   try {
     const shots = await fetchJSON(url);
-    renderShots(shots);
+    // if grouped response (array of {reel,count}) then render groups,
+    // else render shots list as before
+    if (shots.length && shots[0].hasOwnProperty('count') && shots[0].hasOwnProperty('reel')) {
+      renderShotGroupsByReel(shots);
+    } else {
+      renderShotsList(shots);
+    }
   } catch (err) { console.error(err); }
 }
 
@@ -266,13 +272,18 @@ function renderShots(shots) {
   tbody.innerHTML = "";
   // populate reel & artist filters
   const reels = new Set(); const artists = new Set();
-  shots.forEach(s => { const r = (s.code||"").split("_")[1]; if (r) reels.add(r); if (s.assigned_to) artists.add(s.assigned_to); });
+  shots.forEach(s => { const r = (s.reel && s.reel.trim()) ? s.reel : (s.code||"").split("_")[1]; if (r) reels.add(r); if (s.assigned_to) artists.add(s.assigned_to); });
   const fr = document.getElementById("filterReel"); if (fr) { fr.innerHTML = '<option value="">All Reels</option>'; Array.from(reels).sort().forEach(r=>{ const o=document.createElement("option"); o.value=r; o.textContent=r; fr.appendChild(o); }); }
   const fa = document.getElementById("filterArtist"); if (fa) { fa.innerHTML = '<option value="">All Artists</option>'; Array.from(artists).sort().forEach(a=>{ const o=document.createElement("option"); o.value=a; o.textContent=a; fa.appendChild(o); }); }
 
   shots.forEach(s=>{
     if (activeLegendStatuses.size>0 && !activeLegendStatuses.has(s.status)) return;
     const tr = document.createElement("tr"); tr.dataset.id = s.id; tr.className = "";
+    const selectTd = document.createElement("td"); selectTd.style.textAlign = 'center';
+    const selCb = document.createElement('input'); selCb.type='checkbox'; selCb.className='shot-select'; selCb.dataset.id = s.id; selCb.onclick = (e)=>{ e.stopPropagation(); updateBulkDeleteVisibility(); };
+    selectTd.appendChild(selCb);
+    tr.appendChild(selectTd);
+
     const thumbTd = document.createElement("td"); thumbTd.setAttribute("data-col","thumb");
     if (isImagePath(s.plate_path)) {
       const img = document.createElement("img"); img.src = `/api/shot_thumb/${s.id}`; img.className="shot-thumb"; thumbTd.appendChild(img);
@@ -283,7 +294,7 @@ function renderShots(shots) {
     tr.appendChild(thumbTd);
 
     const codeTd = document.createElement("td"); codeTd.textContent = s.code; tr.appendChild(codeTd);
-    const reelTd = document.createElement("td"); reelTd.textContent = (s.code||"").split("_")[1] || ""; tr.appendChild(reelTd);
+    const reelTd = document.createElement("td"); reelTd.textContent = (s.reel && s.reel.trim()) ? s.reel : ((s.code||"").split("_")[1] || ""); tr.appendChild(reelTd);
     const verTd = document.createElement("td"); verTd.textContent = s.version || ""; tr.appendChild(verTd);
 
     const artistTd = document.createElement("td"); const artistSpan=document.createElement("span"); artistSpan.textContent = s.assigned_to||""; artistTd.appendChild(artistSpan); tr.appendChild(artistTd);
@@ -307,10 +318,17 @@ function renderShots(shots) {
     actionsTd.appendChild(delBtn);
     tr.appendChild(actionsTd);
 
-    // attach click to load comments / preview
-    tr.onclick = ()=>{ document.querySelectorAll("#shotTable tbody tr").forEach(r=>r.classList.remove("active")); tr.classList.add("active"); loadComments(s.id, s.code); };
+    // attach click to load comments / preview (ignore clicks on checkbox)
+    tr.onclick = (e)=>{ if (e.target && e.target.classList && e.target.classList.contains('shot-select')) return; document.querySelectorAll("#shotTable tbody tr").forEach(r=>r.classList.remove("active")); tr.classList.add("active"); loadComments(s.id, s.code); };
     tbody.appendChild(tr);
   });
+}
+
+function updateBulkDeleteVisibility(){
+  const any = Array.from(document.querySelectorAll('.shot-select')).some(c=>c.checked);
+  let btn = document.getElementById('bulkDeleteBtnMain');
+  if (!btn) return;
+  btn.style.display = any ? '' : 'none';
 }
 
 async function loadComments(shotId, shotCode) {
@@ -325,6 +343,41 @@ async function loadComments(shotId, shotCode) {
       list.appendChild(div);
     });
   } catch(e){ console.error(e); }
+}
+
+function applyShotFilters() {
+  const reel = document.getElementById('reelFilter').value.trim();
+  const group_by = document.getElementById('groupBySelect').value;
+
+  const params = new URLSearchParams();
+  if (reel) params.append('reel', reel);
+  if (group_by) params.append('group_by', group_by);
+
+  // assume currentProjectId is available in page context
+  loadShots(`?${params.toString()}`);
+}
+
+function renderShotGroupsByReel(groups) {
+  const container = document.getElementById('shots-list');
+  container.innerHTML = '';
+  groups.forEach(g => {
+    const header = document.createElement('h4');
+    header.textContent = `Reel: ${g.reel || '(empty)'} — ${g.count} shots`;
+    container.appendChild(header);
+    // optionally, fetch shots for that reel and render below header:
+    fetch(`/api/projects/${currentProjectId}/shots?reel=${encodeURIComponent(g.reel)}`, { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(shots => {
+        const ul = document.createElement('div');
+        shots.forEach(s => {
+          const div = document.createElement('div');
+          div.className = 'shot-row';
+          div.textContent = `${s.code} — ${s.description || ''}`;
+          ul.appendChild(div);
+        });
+        container.appendChild(ul);
+      });
+  });
 }
 
 document.addEventListener("DOMContentLoaded", async ()=>{
@@ -353,6 +406,26 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   document.getElementById("projectForm").addEventListener("submit", async (e)=>{ e.preventDefault(); try{ const name=document.getElementById("projectName").value; const start=document.getElementById("projectStart").value; await fetch("/api/projects",{method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({name, start_date:start})}); document.getElementById("projectForm").reset(); loadProjects(); }catch(err){alert("Error creating project");} });
 
   document.getElementById("exportCsvBtn").addEventListener("click", ()=>{ if (!currentProjectId) { alert("Select a project"); return; } const qs = new URLSearchParams(); if (activeLegendStatuses.size>0) activeLegendStatuses.forEach(s=>qs.append("status", s)); const url = `/api/projects/${currentProjectId}/export_csv` + (qs.toString() ? "?"+qs.toString() : ""); window.open(url); });
+
+  // bulk delete button for main table view
+  (function(){
+    const sc = document.querySelector('.shots-controls');
+    if (sc) {
+      let btn = document.createElement('button'); btn.id = 'bulkDeleteBtnMain'; btn.textContent = 'Delete Selected'; btn.style.background = '#b23131'; btn.style.color = '#fff'; btn.style.display = 'none'; btn.onclick = async ()=>{
+        const ids = Array.from(document.querySelectorAll('.shot-select:checked')).map(c=>parseInt(c.dataset.id));
+        if (!ids.length) { alert('No shots selected'); return; }
+        if (!confirm(`Delete ${ids.length} selected shots?`)) return;
+        try {
+          const res = await fetch('/api/shots/bulk_delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})});
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error||JSON.stringify(data));
+          alert('Deleted ' + (data.deleted||0) + ' shots');
+          loadShots(currentProjectId);
+        } catch (e){ alert('Delete failed: '+e.message); }
+      };
+      sc.appendChild(btn);
+    }
+  })();
 
   document.getElementById("addCommentBtn").addEventListener("click", async ()=>{ const txt=document.getElementById("commentText").value.trim(); if (!txt) return; const tr = document.querySelector("#shotTable tbody tr.active"); if (!tr) { alert("Select shot"); return; } const sid = tr.dataset.id; try{ await fetch(`/api/shots/${sid}/comments`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text: txt})}); document.getElementById("commentText").value=""; loadComments(sid); }catch(e){alert("Error adding");} });
 

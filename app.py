@@ -15,6 +15,14 @@ from flask import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from urllib.parse import quote_plus
+from sqlalchemy import func
+try:
+    # Load .env file if present so environment variables in .env are available
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -52,7 +60,18 @@ DEV_PORT = int(os.environ.get("DEV_PORT", 5000))
 PROD_PORT = int(os.environ.get("PROD_PORT", 8000))
 
 app.config["SECRET_KEY"] = os.environ.get("DC_SECRET_KEY", "dc_projects_secret_change")
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{BASE_DIR / 'dc_projects.db'}"
+
+# Database Configuration - MySQL only
+DB_HOST = os.environ.get("DB_HOST", "localhost")
+DB_PORT = os.environ.get("DB_PORT", "3306")
+DB_USER = os.environ.get("DB_USER", "root")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
+DB_NAME = os.environ.get("DB_NAME", "dc_projects")
+
+# URL-encode credentials (passwords may contain '@' or other special chars)
+db_user_esc = quote_plus(DB_USER)
+db_pass_esc = quote_plus(DB_PASSWORD)
+app.config["SQLALCHEMY_DATABASE_URI"] = f"mysql+pymysql://{db_user_esc}:{db_pass_esc}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -91,6 +110,8 @@ class Shot(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False)
 
     code = db.Column(db.String(200), nullable=False)
+    __table_args__ = (db.UniqueConstraint('project_id', 'code', name='uk_shot_project_code'),)
+    reel = db.Column(db.String(100), nullable=True)
     description = db.Column(db.String(500), nullable=True)
     assigned_to = db.Column(db.String(500), nullable=True)
     start_date = db.Column(db.String(20), nullable=True)
@@ -119,6 +140,7 @@ class Shot(db.Model):
             "id": self.id,
             "project_id": self.project_id,
             "code": self.code,
+            "reel": self.reel or "",
             "description": self.description or "",
             "assigned_to": self.assigned_to or "",
             "start_date": self.start_date or "",
@@ -148,7 +170,7 @@ class Comment(db.Model):
 # SAFE DB INIT (call at startup)
 # -------------------------
 def ensure_db():
-    db.create_all()
+    """Ensure default admin user exists."""
     if not User.query.filter_by(username="admin").first():
         u = User(username="admin", pwd_hash=generate_password_hash("admin"), role="admin", display_name="Administrator")
         db.session.add(u)
@@ -399,6 +421,11 @@ def project_shots(project_id):
         if not code:
             return jsonify({"error": "code required"}), 400
         
+        # Check for duplicate code in same project
+        existing = Shot.query.filter_by(project_id=project_id, code=code).first()
+        if existing:
+            return jsonify({"error": f"Shot code '{code}' already exists in this project"}), 400
+        
         # Auto-extract version from code if not provided
         if not version:
             import re
@@ -411,10 +438,13 @@ def project_shots(project_id):
         db.session.commit()
         return jsonify({"ok": True, "id": s.id}), 201
 
+    # new: filter by reel param
     q = Shot.query.filter_by(project_id=project_id)
-    reel = request.args.get("reel")
+
+    reel = request.args.get('reel')
     if reel:
-        q = q.filter(Shot.code.contains(reel))
+        q = q.filter(Shot.reel == reel)
+
     code = request.args.get("code")
     if code:
         q = q.filter(Shot.code.contains(code))
@@ -430,8 +460,21 @@ def project_shots(project_id):
     status = request.args.get("status")
     if status:
         q = q.filter(Shot.status == status)
+    
+    # support grouping
+    group_by = request.args.get('group_by')
+    if group_by == 'reel':
+        groups_q = db.session.query(Shot.reel, func.count(Shot.id)).filter(Shot.project_id == project_id)
+        if reel:
+            groups_q = groups_q.filter(Shot.reel == reel)
+        groups_q = groups_q.group_by(Shot.reel).order_by(Shot.reel)
+        groups = groups_q.all()
+        res = [{'reel': (r if r is not None else ''), 'count': c} for r, c in groups]
+        return jsonify(res)
+
+    # pagination / sorting / return list as before
     shots = q.order_by(Shot.id).all()
-    return jsonify([shot.to_dict() for shot in shots])
+    return jsonify([s.to_dict() for s in shots])
 
 
 @app.route("/api/shots/<int:shot_id>", methods=["GET", "PUT", "DELETE"])
@@ -450,7 +493,7 @@ def api_shot(shot_id):
     if not current or current.role not in ("admin", "producer", "supervisor"):
         return jsonify({"error": "forbidden"}), 403
     data = request.get_json() or {}
-    allowed = ["assigned_to", "status", "description", "due_date", "plate_path", "mov_path", "exr_path", "nuke_path", "code"]
+    allowed = ["assigned_to", "status", "description", "due_date", "plate_path", "mov_path", "exr_path", "nuke_path", "code", "reel"]
     # allow updating version as well
     allowed.append("version")
     changed = False
@@ -461,6 +504,28 @@ def api_shot(shot_id):
     if changed:
         db.session.commit()
     return jsonify(s.to_dict())
+
+
+@app.route("/api/shots/bulk_delete", methods=["POST"])
+def api_shots_bulk_delete():
+    """Delete multiple shots. Expects JSON body: {"ids": [1,2,3]}"""
+    uid = session.get("user_id")
+    current = User.query.get(uid) if uid else None
+    if not current or current.role not in ("admin", "producer", "supervisor"):
+        return jsonify({"error": "forbidden"}), 403
+
+    data = request.get_json() or {}
+    ids = data.get("ids")
+    if not ids or not isinstance(ids, list):
+        return jsonify({"error": "ids (list) required"}), 400
+
+    try:
+        deleted = Shot.query.filter(Shot.id.in_(ids)).delete(synchronize_session=False)
+        db.session.commit()
+        return jsonify({"deleted": deleted})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "delete failed", "detail": str(e)}), 500
 
 
 @app.route("/api/shots/<int:shot_id>/comments", methods=["GET", "POST"])
@@ -640,7 +705,7 @@ def api_shot_nuke_path(shot_id):
     proj = Project.query.get(s.project_id)
     if proj and proj.folder_path:
         parts = (s.code or "").split("_")
-        reel = parts[1] if len(parts) >= 2 else "REEL"
+        reel = s.reel if s.reel else (parts[1] if len(parts) >= 2 else "REEL")
         shot_folder = s.code or f"shot_{s.id}"
         comp_dir = os.path.join(proj.folder_path, "Comp", reel, shot_folder)
         os.makedirs(comp_dir, exist_ok=True)
@@ -657,7 +722,7 @@ def api_generate_comp(shot_id):
     if not proj or not proj.folder_path:
         return jsonify({"error": "project folder_path not configured"}), 400
     parts = (s.code or "").split("_")
-    reel = parts[1] if len(parts) >= 2 else "REEL"
+    reel = s.reel if s.reel else (parts[1] if len(parts) >= 2 else "REEL")
     shot_folder = s.code or f"shot_{s.id}"
     comp_dir = os.path.join(proj.folder_path, "Comp", reel, shot_folder)
     os.makedirs(comp_dir, exist_ok=True)
@@ -731,9 +796,9 @@ def api_shot_generate_structure(shot_id):
     if not proj or not proj.folder_path:
         return jsonify({"error": "project folder_path not configured"}), 400
 
-    # Determine reel from shot code (second segment after underscore)
+    # Determine reel (prefer stored `reel`, fallback to shot.code second segment)
     parts = (s.code or "").split("_")
-    raw_reel = parts[1] if len(parts) >= 2 and parts[1] else "01"
+    raw_reel = s.reel if s.reel and str(s.reel).strip() else (parts[1] if len(parts) >= 2 and parts[1] else "01")
     # Normalize reel folder name: prefix with 'Reel_' unless already contains 'reel'
     if isinstance(raw_reel, str) and raw_reel.strip():
         rr = raw_reel.strip()
@@ -839,9 +904,8 @@ def api_export_csv(project_id):
     cw = csv.writer(si)
     cw.writerow(["id", "code", "reel", "version", "description", "assigned_to", "due_date", "status", "plate_path", "mov_path", "exr_path"])
     for s in shots:
-        reel = (s.code or "").split("_")[1] if "_" in (s.code or "") else ""
-        # Use extracted version to ensure consistency with UI/display logic
-        cw.writerow([s.id, s.code, reel, s.extract_version() or "", s.description, s.assigned_to, s.due_date, s.status, s.plate_path, s.mov_path, s.exr_path])
+        # Use reel column from database
+        cw.writerow([s.id, s.code, s.reel or "", s.extract_version() or "", s.description, s.assigned_to, s.due_date, s.status, s.plate_path, s.mov_path, s.exr_path])
     output = make_response(si.getvalue())
     output.headers["Content-Disposition"] = f"attachment; filename={proj.name}_shots_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.csv"
     output.headers["Content-type"] = "text/csv"
@@ -883,6 +947,7 @@ def api_import_csv(project_id):
     # Helper aliases
     aliases = {
         "code": ["code", "shot_code", "shot", "shotcode"],
+        "reel": ["reel", "reel_code", "reelcode"],
         "description": ["description", "desc", "notes"],
         "assigned_to": ["assigned_to", "assigned", "artist", "assignee"],
         "start_date": ["start_date", "start"],
@@ -925,6 +990,7 @@ def api_import_csv(project_id):
             mov_path = get_alias("mov_path")
             exr_path = get_alias("exr_path")
             version = get_alias("version")
+            reel = get_alias("reel")
 
             if not code:
                 errors.append({"line": line_no, "error": "missing code"})
@@ -935,10 +1001,11 @@ def api_import_csv(project_id):
                 if m:
                     version = f"V{m.group(1)}"
 
-            # build mapping for bulk insert
+            # build mapping for bulk insert (reel stored separately, code unchanged)
             mapping = {
                 "project_id": project_id,
                 "code": code,
+                "reel": reel or "",
                 "description": description,
                 "assigned_to": assigned_to,
                 "start_date": start_date,
@@ -966,21 +1033,57 @@ def api_import_csv(project_id):
         if first_col_vals and numeric_first >= max(1, len(first_col_vals) - 1):
             skip_index = True
 
+        # attempt to detect a reel column position (headerless) by heuristics
+        reel_pos = None
+        if filtered:
+            max_cols = max(len(r) for r in filtered)
+            # search candidate positions within first 6 columns (after idx)
+            candidates = range(0, min(6, max_cols))
+            best = None
+            for c in candidates:
+                vals_c = [r[c].strip() for r in filtered if len(r) > c and (r[c] or '').strip()]
+                if not vals_c:
+                    continue
+                # reel-like: short, no spaces, alnum/underscore/dash, not a date, not purely numeric
+                reel_like = [v for v in vals_c if re.match(r"^[A-Za-z0-9_-]{1,8}$", v) and not re.match(r"^\d{4}-\d{2}-\d{2}$", v) and not v.isdigit()]
+                ratio = len(reel_like) / len(vals_c)
+                if ratio >= 0.6 and len(vals_c) >= 2:
+                    best = c
+                    break
+            if best is not None:
+                reel_pos = best
+
         line_no = 0
         for vals in filtered:
             line_no += 1
             # If first column is an index, shift columns by one
             idx = 1 if skip_index else 0
             code = vals[idx].strip() if len(vals) > idx else ""
-            description = vals[idx+1].strip() if len(vals) > idx+1 else ""
-            assigned_to = vals[idx+2].strip() if len(vals) > idx+2 else ""
-            start_date = vals[idx+3].strip() if len(vals) > idx+3 else ""
-            due_date = vals[idx+4].strip() if len(vals) > idx+4 else ""
-            status = vals[idx+5].strip() if len(vals) > idx+5 and vals[idx+5].strip() else "Not Started"
-            plate_path = vals[idx+6].strip() if len(vals) > idx+6 else ""
-            mov_path = vals[idx+7].strip() if len(vals) > idx+7 else ""
-            exr_path = vals[idx+8].strip() if len(vals) > idx+8 else ""
-            version = vals[idx+9].strip() if len(vals) > idx+9 else ""
+            # If a separate reel column detected, extract it
+            reel = None
+            if reel_pos is not None and len(vals) > reel_pos:
+                reel = vals[reel_pos].strip()
+            # assume positions: code, reel, description, assigned_to, start_date, due_date, status, plate, mov, exr, version
+            if reel_pos is not None and reel_pos == idx+1:
+                description = vals[idx+2].strip() if len(vals) > idx+2 else ""
+                assigned_to = vals[idx+3].strip() if len(vals) > idx+3 else ""
+                start_date = vals[idx+4].strip() if len(vals) > idx+4 else ""
+                due_date = vals[idx+5].strip() if len(vals) > idx+5 else ""
+                status = vals[idx+6].strip() if len(vals) > idx+6 and vals[idx+6].strip() else "Not Started"
+                plate_path = vals[idx+7].strip() if len(vals) > idx+7 else ""
+                mov_path = vals[idx+8].strip() if len(vals) > idx+8 else ""
+                exr_path = vals[idx+9].strip() if len(vals) > idx+9 else ""
+                version = vals[idx+10].strip() if len(vals) > idx+10 else ""
+            else:
+                description = vals[idx+1].strip() if len(vals) > idx+1 else ""
+                assigned_to = vals[idx+2].strip() if len(vals) > idx+2 else ""
+                start_date = vals[idx+3].strip() if len(vals) > idx+3 else ""
+                due_date = vals[idx+4].strip() if len(vals) > idx+4 else ""
+                status = vals[idx+5].strip() if len(vals) > idx+5 and vals[idx+5].strip() else "Not Started"
+                plate_path = vals[idx+6].strip() if len(vals) > idx+6 else ""
+                mov_path = vals[idx+7].strip() if len(vals) > idx+7 else ""
+                exr_path = vals[idx+8].strip() if len(vals) > idx+8 else ""
+                version = vals[idx+9].strip() if len(vals) > idx+9 else ""
 
             if not code:
                 errors.append({"line": line_no, "error": "missing code"})
@@ -994,6 +1097,7 @@ def api_import_csv(project_id):
             mapping = {
                 "project_id": project_id,
                 "code": code,
+                "reel": reel or "",
                 "description": description,
                 "assigned_to": assigned_to,
                 "start_date": start_date,
@@ -1009,10 +1113,24 @@ def api_import_csv(project_id):
     # Perform bulk insert for speed
     if to_insert:
         try:
+            # Filter out duplicate codes within same project
+            existing_codes = set(s.code for s in Shot.query.filter_by(project_id=project_id).all())
+            filtered_rows = []
+            skipped_duplicates = 0
+            for mapping in to_insert:
+                code = mapping.get('code', '').strip()
+                if code in existing_codes:
+                    skipped_duplicates += 1
+                    errors.append({"error": f"Skipped duplicate code: {code}"})
+                    continue
+                filtered_rows.append(mapping)
+                existing_codes.add(code)  # track newly added codes to skip duplicates within import file
+            
             # Use bulk_insert_mappings to bypass per-object overhead
-            db.session.bulk_insert_mappings(Shot, to_insert)
-            db.session.commit()
-            imported = len(to_insert)
+            if filtered_rows:
+                db.session.bulk_insert_mappings(Shot, filtered_rows)
+                db.session.commit()
+                imported = len(filtered_rows)
         except Exception as e:
             db.session.rollback()
             errors.append({"error": "bulk insert failed", "detail": str(e)})
@@ -1075,6 +1193,7 @@ def api_import_preview(project_id):
     aliases = {
         # avoid mapping generic 'id' header to code — index columns often contain numeric ids
         "code": ["code", "shot_code", "shot", "shotcode"],
+        "reel": ["reel", "reel_code", "reelcode"],
         "description": ["description", "desc", "notes"],
         "assigned_to": ["assigned_to", "assigned", "artist", "assignee"],
         "start_date": ["start_date", "start"],
@@ -1100,8 +1219,8 @@ def api_import_preview(project_id):
             suggested[field] = found
     else:
         # positional suggestion (index-based)
-        # default positional mapping: code,description,assigned_to,start_date,due_date,status,plate_path,mov_path,exr_path,version
-        posmap = ["code","description","assigned_to","start_date","due_date","status","plate_path","mov_path","exr_path","version"]
+        # default positional mapping: code,reel,description,assigned_to,start_date,due_date,status,plate_path,mov_path,exr_path,version
+        posmap = ["code","reel","description","assigned_to","start_date","due_date","status","plate_path","mov_path","exr_path","version"]
         # detect numeric index column in first position and advise shifting if present
         sample = data_rows[:6]
         first_col_vals = [r[0] for r in sample if len(r) > 0]
@@ -1165,19 +1284,6 @@ def api_open_folder():
 def health():
     return jsonify({"ok": True})
 
-
-# -------------------------
-# STARTUP
-# -------------------------
-if __name__ == "__main__":
-    # ensure base data folder exists
-    try:
-        os.makedirs(BASE_DIR / "data", exist_ok=True)
-    except Exception:
-        pass
-
-    with app.app_context():
-        ensure_db()
 
 # -------------------------
 # STARTUP
