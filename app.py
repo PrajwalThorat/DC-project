@@ -253,7 +253,7 @@ def api_session():
     uid = session.get("user_id")
     if not uid:
         return jsonify({"logged_in": False})
-    user = User.query.get(uid)
+    user = db.session.get(User, uid)
     if not user:
         return jsonify({"logged_in": False})
     return jsonify({"logged_in": True, "username": user.username, "role": user.role, "display_name": user.display_name})
@@ -262,7 +262,7 @@ def api_session():
 @app.route("/api/users", methods=["GET", "POST"])
 def api_users():
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if request.method == "GET":
         users = User.query.order_by(User.username).all()
         return jsonify([u.to_dict() for u in users])
@@ -286,7 +286,7 @@ def api_users():
 @app.route("/api/users/<int:user_id>", methods=["PUT", "DELETE"])
 def api_user_edit(user_id):
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if not current or current.role != "admin":
         return jsonify({"error": "forbidden"}), 403
     u = User.query.get_or_404(user_id)
@@ -311,7 +311,7 @@ def api_projects():
         projects = Project.query.order_by(Project.name).all()
         return jsonify([p.to_dict() for p in projects])
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if not current or current.role not in ("admin", "producer"):
         return jsonify({"error": "forbidden"}), 403
     data = request.get_json() or {}
@@ -363,7 +363,7 @@ def api_projects():
 def api_project_edit(project_id):
     p = Project.query.get_or_404(project_id)
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if request.method == "GET":
         return jsonify(p.to_dict())
     if not current or current.role not in ("admin", "producer"):
@@ -392,7 +392,7 @@ def project_shots(project_id):
     proj = Project.query.get_or_404(project_id)
     if request.method == "POST":
         uid = session.get("user_id")
-        current = User.query.get(uid) if uid else None
+        current = db.session.get(User, uid) if uid else None
         if not current or current.role not in ("admin", "producer", "supervisor"):
             return jsonify({"error": "forbidden"}), 403
         if request.content_type and request.content_type.startswith("multipart"):
@@ -481,7 +481,7 @@ def project_shots(project_id):
 def api_shot(shot_id):
     s = Shot.query.get_or_404(shot_id)
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if request.method == "GET":
         return jsonify(s.to_dict())
     if request.method == "DELETE":
@@ -510,7 +510,7 @@ def api_shot(shot_id):
 def api_shots_bulk_delete():
     """Delete multiple shots. Expects JSON body: {"ids": [1,2,3]}"""
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if not current or current.role not in ("admin", "producer", "supervisor"):
         return jsonify({"error": "forbidden"}), 403
 
@@ -535,7 +535,7 @@ def api_shot_comments(shot_id):
         comments = Comment.query.filter_by(shot_id=shot_id).order_by(Comment.id).all()
         return jsonify([c.to_dict() for c in comments])
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if not current:
         return jsonify({"error": "login required"}), 403
     data = request.get_json() or {}
@@ -552,7 +552,7 @@ def api_shot_comments(shot_id):
 def api_comment_edit(comment_id):
     c = Comment.query.get_or_404(comment_id)
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if not current:
         return jsonify({"error": "login required"}), 403
     if current.role != "admin" and current.username != c.author:
@@ -702,7 +702,7 @@ def api_shot_nuke_path(shot_id):
     s = Shot.query.get_or_404(shot_id)
     if s.nuke_path:
         return jsonify({"path": s.nuke_path})
-    proj = Project.query.get(s.project_id)
+    proj = db.session.get(Project, s.project_id)
     if proj and proj.folder_path:
         parts = (s.code or "").split("_")
         reel = s.reel if s.reel else (parts[1] if len(parts) >= 2 else "REEL")
@@ -718,7 +718,7 @@ def api_shot_nuke_path(shot_id):
 @app.route("/api/shots/<int:shot_id>/generate_comp", methods=["POST"])
 def api_generate_comp(shot_id):
     s = Shot.query.get_or_404(shot_id)
-    proj = Project.query.get(s.project_id)
+    proj = db.session.get(Project, s.project_id)
     if not proj or not proj.folder_path:
         return jsonify({"error": "project folder_path not configured"}), 400
     parts = (s.code or "").split("_")
@@ -757,7 +757,7 @@ def api_generate_comp(shot_id):
 def api_shot_create_folders(shot_id):
     """Create a set of folders for a shot. Accepts JSON {"names": ["A","B"]} or uses defaults."""
     s = Shot.query.get_or_404(shot_id)
-    proj = Project.query.get(s.project_id)
+    proj = db.session.get(Project, s.project_id)
     if not proj or not proj.folder_path:
         return jsonify({"error": "project folder_path not configured"}), 400
 
@@ -792,7 +792,7 @@ def api_shot_generate_structure(shot_id):
     Creates: Annotations, CG Assets, comp, DeNoise, MM, Paint, precomp, Roto
     """
     s = Shot.query.get_or_404(shot_id)
-    proj = Project.query.get(s.project_id)
+    proj = db.session.get(Project, s.project_id)
     if not proj or not proj.folder_path:
         return jsonify({"error": "project folder_path not configured"}), 400
 
@@ -842,7 +842,7 @@ def api_shot_generate_structure(shot_id):
 @app.route("/api/shots/<int:shot_id>/send_to_client", methods=["POST"])
 def api_send_to_client(shot_id):
     s = Shot.query.get_or_404(shot_id)
-    proj = Project.query.get(s.project_id)
+    proj = db.session.get(Project, s.project_id)
     if not proj or not proj.folder_path:
         return jsonify({"error": "project folder_path not configured"}), 400
     today = datetime.utcnow().strftime("%Y%m%d")
@@ -922,7 +922,7 @@ def api_import_csv(project_id):
     columns are used (same order as previous client import).
     """
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if not current or current.role not in ("admin", "producer", "supervisor"):
         return jsonify({"error": "forbidden"}), 403
 
@@ -1146,7 +1146,7 @@ def api_import_preview(project_id):
     from canonical field names to header names or positional indexes.
     """
     uid = session.get("user_id")
-    current = User.query.get(uid) if uid else None
+    current = db.session.get(User, uid) if uid else None
     if not current:
         return jsonify({"error": "login required"}), 403
 
