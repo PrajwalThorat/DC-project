@@ -820,6 +820,102 @@
       .controls button:hover {
         background: #764ba2;
       }
+
+      /* ===== ANIMATIONS ===== */
+      @keyframes slideIn {
+        from { transform: translateX(-10px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 8px rgba(255, 215, 0, 0.4), inset 4px 0 0 #ffd700; }
+        50% { box-shadow: 0 0 16px rgba(255, 215, 0, 0.8), inset 4px 0 0 #ffd700; }
+      }
+
+      @keyframes bounce-select {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      /* ===== SHOT ROW STYLING ===== */
+      #shotsContainer tbody tr {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+      }
+
+      #shotsContainer tbody tr:hover {
+        box-shadow: 0 4px 12px rgba(63, 81, 181, 0.15), inset 0 1px 3px rgba(255, 255, 255, 0.05);
+        transform: translateY(-2px);
+      }
+
+      /* Shot selection highlight with animations */
+      .shot-row-selected {
+        background-color: #3f51b5 !important;
+        border-left-width: 4px !important;
+        box-shadow: 0 6px 16px rgba(255, 215, 0, 0.3), inset 4px 0 0 #ffd700 !important;
+        animation: slideIn 0.3s ease-out, pulse-glow 2s ease-in-out infinite;
+        font-weight: 500;
+        border-radius: 4px 0 0 4px;
+      }
+
+      .shot-row-selected:hover {
+        background-color: #5c6bc0 !important;
+        box-shadow: 0 8px 20px rgba(255, 215, 0, 0.4), inset 4px 0 0 #ffd700 !important;
+        transform: translateY(-3px);
+      }
+
+      /* Checkbox animation */
+      .shot-select {
+        cursor: pointer;
+        transition: transform 0.2s ease;
+      }
+
+      .shot-select:checked {
+        animation: bounce-select 0.4s ease;
+      }
+
+      .shot-select:hover {
+        transform: scale(1.15);
+      }
+
+      /* ===== ENHANCED HOVER STATES ===== */
+      #shotsContainer tbody tr td {
+        transition: color 0.2s ease;
+      }
+
+      #shotsContainer tbody tr:not(.shot-row-selected):hover {
+        background-color: rgba(63, 81, 181, 0.08) !important;
+      }
+
+      /* Delete button styling */
+      #deleteSelectedBtn {
+        display: none !important;
+        animation: fadeIn 0.3s ease !important;
+        transition: all 0.2s ease !important;
+        background: linear-gradient(135deg, #e53935 0%, #c62828 100%) !important;
+        color: #fff !important;
+        padding: 6px 12px !important;
+        border: 1px solid #a91b1b !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(229, 57, 53, 0.3) !important;
+      }
+
+      #deleteSelectedBtn:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 16px rgba(229, 57, 53, 0.4) !important;
+        background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%) !important;
+      }
+
+      #deleteSelectedBtn:active {
+        transform: translateY(0) !important;
+      }
     </style>
   </head>
   <body>
@@ -913,7 +1009,7 @@
           >
             Import
           </button>
-          <button id="deleteSelectedBtn" onclick="deleteSelectedShots()" style="display:none; background:#b23131; color:#fff;">Delete Selected</button>
+          <button id="deleteSelectedBtn" class="delete-btn-primary" onclick="deleteSelectedShots()">Delete Selected</button>
           <button id="exportBtn" onclick="exportCsv()">Export</button>
           <button id="groupReelBtn" onclick="toggleGrouping()">🔄 Group by Reel</button>
           <select id="groupReelSelect" style="display:none; padding:6px 10px; border-radius:4px; background:#0f3460; color:#eee; border:1px solid #333; font-size:12px;" onchange="onSelectReel()">
@@ -1972,18 +2068,96 @@
         if (group) {
           // select checkboxes within that group's table
           const table = document.querySelector(`#shotsContainer table[style*='Reel: ${group}']`) || document;
-          table.querySelectorAll(`.shot-select`).forEach(cb => { cb.checked = checkbox.checked; });
+          table.querySelectorAll(`.shot-select`).forEach((cb, index) => {
+            // Stagger the animation for visual effect
+            setTimeout(() => {
+              cb.checked = checkbox.checked;
+              const row = cb.closest('tr');
+              if (row) {
+                if (checkbox.checked) {
+                  row.classList.add('shot-row-selected');
+                } else {
+                  row.classList.remove('shot-row-selected');
+                }
+              }
+            }, index * 20); // 20ms delay between each row
+          });
         } else {
-          document.querySelectorAll(`#shotsContainer .shot-select`).forEach(cb => { cb.checked = checkbox.checked; });
+          document.querySelectorAll(`#shotsContainer .shot-select`).forEach((cb, index) => {
+            // Stagger the animation for visual effect
+            setTimeout(() => {
+              cb.checked = checkbox.checked;
+              const row = cb.closest('tr');
+              if (row) {
+                if (checkbox.checked) {
+                  row.classList.add('shot-row-selected');
+                } else {
+                  row.classList.remove('shot-row-selected');
+                }
+              }
+            }, index * 20); // 20ms delay between each row
+          });
         }
-        // show/hide delete button
-        const any = Array.from(document.querySelectorAll('#shotsContainer .shot-select')).some(c=>c.checked);
-        const btn = document.getElementById('deleteSelectedBtn');
-        if (btn) btn.style.display = any ? '' : 'none';
+        // Update delete button with selection count
+        setTimeout(() => {
+          const selectedCount = Array.from(document.querySelectorAll('#shotsContainer .shot-select:checked')).length;
+          const btn = document.getElementById('deleteSelectedBtn');
+          if (btn) {
+            if (selectedCount > 0) {
+              btn.style.display = 'inline-block';
+              btn.textContent = `Delete Selected (${selectedCount})`;
+            } else {
+              btn.style.display = 'none';
+              btn.textContent = 'Delete Selected';
+            }
+          }
+        }, 200);
       }
 
       function getSelectedShotIds() {
         return Array.from(document.querySelectorAll('#shotsContainer .shot-select:checked')).map(cb => parseInt(cb.dataset.id));
+      }
+
+      // Add event listener for shot selection checkboxes
+      document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('shot-select')) {
+          const row = e.target.closest('tr');
+          if (row) {
+            if (e.target.checked) {
+              row.classList.add('shot-row-selected');
+              // Add a subtle scale animation
+              row.style.animation = 'none';
+              setTimeout(() => { row.style.animation = ''; }, 10);
+            } else {
+              row.classList.remove('shot-row-selected');
+            }
+          }
+          // Update selection count and show/hide delete button
+          const selectedCount = Array.from(document.querySelectorAll('#shotsContainer .shot-select:checked')).length;
+          const btn = document.getElementById('deleteSelectedBtn');
+          if (btn) {
+            if (selectedCount > 0) {
+              btn.style.display = 'inline-block';
+              btn.textContent = `Delete Selected (${selectedCount})`;
+            } else {
+              btn.style.display = 'none';
+              btn.textContent = 'Delete Selected';
+            }
+          }
+          // Visual feedback: update header checkbox state
+          updateSelectAllCheckbox();
+        }
+      });
+
+      function updateSelectAllCheckbox() {
+        // Update the select-all checkbox based on current selections
+        const allCheckboxes = Array.from(document.querySelectorAll('#shotsContainer .shot-select'));
+        const checkedCount = allCheckboxes.filter(c => c.checked).length;
+        const selectAllCheckbox = document.getElementById('selectAllShots');
+        if (selectAllCheckbox) {
+          selectAllCheckbox.checked = checkedCount > 0 && checkedCount === allCheckboxes.length;
+          selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
+        }
       }
 
       async function deleteSelectedShots() {
@@ -1998,7 +2172,11 @@
           // refresh
           await loadShots(currentProjectId);
           // hide delete button
-          const btn = document.getElementById('deleteSelectedBtn'); if (btn) btn.style.display='none';
+          const btn = document.getElementById('deleteSelectedBtn'); 
+          if (btn) {
+            btn.style.display = 'none';
+            btn.textContent = 'Delete Selected';
+          }
         } catch (e) {
           alert('Delete failed: ' + e.message);
         }
