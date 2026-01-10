@@ -2052,8 +2052,8 @@
               <div><strong>Comp:</strong> ${shot.comp ? "✓" : "-"}</div>
             </div>
             <div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;">
-              <button class="btn-submit" onclick="generateShotStructure()">Generate</button>
-              <button class="btn-submit" style="background:#FF6B6B;" onclick="startShot()">🎬 Start shot</button>
+              <button class="btn-submit" onclick="generateShotStructure()">🗂️ Folder</button>
+              <button class="btn-submit" style="background:#FF6B6B;" onclick="startShot()">☢️ Start shot</button>
               ${shot.plate_path ? `<button class="btn-submit" style="background:#667eea;" onclick="window.open('${shot.plate_path.replace(/'/g, "\\'")}')">📁 Plate</button>` : ''}
               ${shot.exr_path ? `<button class="btn-submit" style="background:#667eea;" onclick="window.open('${shot.exr_path.replace(/'/g, "\\'")}')">📁 EXR</button>` : ''}
             </div>
