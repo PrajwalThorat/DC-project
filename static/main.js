@@ -411,7 +411,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   (function(){
     const sc = document.querySelector('.shots-controls');
     if (sc) {
-      let btn = document.createElement('button'); btn.id = 'bulkDeleteBtnMain'; btn.textContent = 'Delete Selected'; btn.style.background = '#b23131'; btn.style.color = '#fff'; btn.style.display = 'none'; btn.onclick = async ()=>{
+      let btn = document.createElement('button'); btn.id = 'bulkDeleteBtnMain'; btn.textContent = 'Delete Selected'; btn.style.background = '#b23131'; btn.style.color = '#fff'; btn.style.display = 'none'; btn.style.padding = '8px 12px'; btn.style.borderRadius = '4px'; btn.style.border = 'none'; btn.style.cursor = 'pointer'; btn.style.fontWeight = 'bold'; btn.onclick = async ()=>{
         const ids = Array.from(document.querySelectorAll('.shot-select:checked')).map(c=>parseInt(c.dataset.id));
         if (!ids.length) { alert('No shots selected'); return; }
         if (!confirm(`Delete ${ids.length} selected shots?`)) return;
@@ -423,6 +423,10 @@ document.addEventListener("DOMContentLoaded", async ()=>{
           loadShots(currentProjectId);
         } catch (e){ alert('Delete failed: '+e.message); }
       };
+      // Update delete button visibility whenever checkboxes change
+      document.querySelectorAll('.shot-select').forEach(cb => {
+        cb.addEventListener('change', () => { btn.style.display = Array.from(document.querySelectorAll('.shot-select')).some(c=>c.checked) ? '' : 'none'; });
+      });
       sc.appendChild(btn);
     }
   })();

@@ -339,7 +339,8 @@ def api_projects():
                 "From Client",
                 "Plates",
                 "Render",
-                "Send to client template",
+                "Send to client",
+                "template",
             ]
             for sf in subfolders:
                 try:
@@ -369,6 +370,13 @@ def api_project_edit(project_id):
     if not current or current.role not in ("admin", "producer"):
         return jsonify({"error": "forbidden"}), 403
     if request.method == "DELETE":
+        # Delete all shots in this project first (due to foreign key constraints)
+        Shot.query.filter_by(project_id=project_id).delete()
+        # Delete all comments related to shots in this project
+        comments = Comment.query.filter(Comment.shot_id.in_(
+            db.session.query(Shot.id).filter_by(project_id=project_id)
+        )).delete(synchronize_session=False)
+        # Now delete the project
         db.session.delete(p)
         db.session.commit()
         return jsonify({"ok": True})
@@ -815,7 +823,7 @@ def api_shot_generate_structure(shot_id):
     reel_dir = os.path.join(comp_base, reel_folder_name)
     shot_dir = os.path.join(reel_dir, shot_folder)
 
-    subfolders = ["Annotations", "CG Assets", "comp", "DeNoise", "MM", "Paint", "precomp", "Roto"]
+    subfolders = ["Annotations", "CG Assets", "Comp", "DeNoise", "MM", "Paint", "precomp", "Roto"]
 
     created = []
     errors = []
@@ -873,6 +881,125 @@ def api_send_to_client(shot_id):
         return jsonify(result)
     except Exception as e:
         app.logger.exception("send_to_client failed")
+        return jsonify({"error": "copy failed", "detail": str(e)}), 500
+
+
+@app.route("/api/shots/<int:shot_id>/start_shot", methods=["POST"])
+def api_start_shot(shot_id):
+    """Copy template nuke file to shot comp folder with proper naming.
+    
+    Looks for: <project_folder>/template/template_*.nk
+    Copies to: <project_folder>/Comps/Reel_<reel>/<shot_code>/Comp/<shot_code>_comp_<version>.nk
+    """
+    s = Shot.query.get_or_404(shot_id)
+    proj = db.session.get(Project, s.project_id)
+    if not proj or not proj.folder_path:
+        return jsonify({"error": "project folder_path not configured"}), 400
+
+    # Determine reel
+    parts = (s.code or "").split("_")
+    raw_reel = s.reel if s.reel and str(s.reel).strip() else (parts[1] if len(parts) >= 2 and parts[1] else "01")
+    if isinstance(raw_reel, str) and raw_reel.strip():
+        rr = raw_reel.strip()
+    else:
+        rr = "01"
+    if rr.lower().startswith("reel"):
+        reel_folder_name = rr
+    else:
+        reel_folder_name = f"Reel_{rr}"
+
+    shot_folder = s.code or f"shot_{s.id}"
+    shot_version = s.extract_version() or "V1"  # Use extract_version to get version from code
+
+    # Build template folder path
+    template_folder = os.path.join(proj.folder_path, "template")
+    
+    app.logger.info(f"Start shot: shot_id={shot_id}, shot_code={s.code}, extracted_version={shot_version}")
+    app.logger.info(f"Template folder: {template_folder}")
+    
+    # Check if template folder exists
+    if not os.path.isdir(template_folder):
+        app.logger.warning(f"Template folder not found: {template_folder}")
+        return jsonify({"error": "Template folder not found"}), 404
+    
+    # List all template files
+    try:
+        template_files = [f for f in os.listdir(template_folder) if f.endswith('.nk')]
+        app.logger.info(f"Template files found: {template_files}")
+    except Exception as e:
+        app.logger.warning(f"Error listing template folder: {e}")
+        return jsonify({"error": "Cannot read template folder"}), 500
+    
+    # Try to find the template file
+    template_path = None
+    template_filename_used = None
+    
+    # Extract just the version number from shot_version (e.g., "001" from "V001")
+    import re
+    version_match = re.search(r'\d+', shot_version)
+    version_number = version_match.group(0) if version_match else ""
+    
+    # Try variations of the template filename
+    possible_names = [
+        f"template_{shot_version}.nk",  # template_V001.nk
+        f"template_v{version_number}.nk",  # template_v001.nk
+        f"template_{shot_version.lower()}.nk",  # template_v001.nk
+    ]
+    
+    app.logger.info(f"Looking for template files matching: {possible_names}")
+    
+    # Case-insensitive search
+    for fname in template_files:
+        fname_lower = fname.lower()
+        for possible_name in possible_names:
+            if fname_lower == possible_name.lower():
+                template_path = os.path.join(template_folder, fname)
+                template_filename_used = fname
+                app.logger.info(f"Found matching template: {fname}")
+                break
+        if template_path:
+            break
+    
+    # If still not found, use the first template_*.nk file
+    if not template_path and template_files:
+        for fname in template_files:
+            if fname.lower().startswith("template_") and fname.lower().endswith(".nk"):
+                template_path = os.path.join(template_folder, fname)
+                template_filename_used = fname
+                app.logger.info(f"Using first available template: {fname}")
+                break
+    
+    # Check if template file exists
+    if not template_path or not os.path.isfile(template_path):
+        app.logger.warning(f"No suitable template file found in: {template_folder}")
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        # Build destination path
+        comp_base = os.path.join(proj.folder_path, "Comps")
+        reel_dir = os.path.join(comp_base, reel_folder_name)
+        shot_dir = os.path.join(reel_dir, shot_folder)
+        comp_dir = os.path.join(shot_dir, "Comp")
+        
+        # Ensure comp directory exists
+        os.makedirs(comp_dir, exist_ok=True)
+        
+        # Destination filename: <shot_code>_comp_<version>.nk
+        dest_filename = f"{shot_folder}_comp_{shot_version}.nk"
+        dest_path = os.path.join(comp_dir, dest_filename)
+        
+        app.logger.info(f"Copying {template_path} to {dest_path}")
+        
+        # Copy the file
+        shutil.copy2(template_path, dest_path)
+        
+        app.logger.info(f"Successfully copied template for shot {shot_id}")
+        return jsonify({
+            "message": f"Shot started! Template copied to {dest_filename}",
+            "dest_path": dest_path
+        }), 200
+    except Exception as e:
+        app.logger.exception("start_shot failed")
         return jsonify({"error": "copy failed", "detail": str(e)}), 500
 
 
