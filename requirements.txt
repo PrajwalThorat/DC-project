@@ -1,9 +1,8 @@
 # Core
-Flask==2.3.3
-Flask-SQLAlchemy==3.0.5
-SQLAlchemy==2.0.21
-Werkzeug==2.3.7
-PyMySQL==1.1.0
+flask==2.3.0
+flask-sqlalchemy==3.0.5
+sqlalchemy==2.0.23
+pymysql==1.1.0
 
 # Development
 flask-debugtoolbar==0.13.1

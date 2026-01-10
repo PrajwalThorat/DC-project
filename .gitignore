@@ -4,3 +4,4 @@ dc_projects.db
 venv/
 .DS_Store
 logs/
+.env
