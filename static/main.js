@@ -182,6 +182,20 @@ async function fetchJSON(url, opts) {
   return r.json();
 }
 
+// Helper to open local filesystem paths in a cross-platform way
+function openFolderPath(p) {
+  if (!p) { alert('Path not provided'); return; }
+  try {
+    let path = String(p);
+    if (/^https?:\/\//i.test(path) || /^file:\/\//i.test(path)) { window.open(path); return; }
+    path = path.replace(/\\\\/g, '/');
+    if (/^[A-Za-z]:\//.test(path)) path = 'file:///' + path;
+    else if (path.startsWith('/')) path = 'file://' + path;
+    else path = 'file:///' + path;
+    window.open(encodeURI(path));
+  } catch(e) { console.error('openFolderPath error', e); window.open(p); }
+}
+
 function applyColVisibility() {
   const mov = localStorage.getItem(LS.MOV);
   const exr = localStorage.getItem(LS.EXR);
@@ -288,7 +302,7 @@ function renderShots(shots) {
     if (isImagePath(s.plate_path)) {
       const img = document.createElement("img"); img.src = `/api/shot_thumb/${s.id}`; img.className="shot-thumb"; thumbTd.appendChild(img);
     } else {
-      const btn = document.createElement("button"); btn.textContent = isVideoPath(s.plate_path)? "▶":"□"; btn.disabled = !s.plate_path; btn.onclick = (e)=>{ e.stopPropagation(); window.open(s.plate_path); };
+      const btn = document.createElement("button"); btn.textContent = isVideoPath(s.plate_path)? "▶":"□"; btn.disabled = !s.plate_path; btn.onclick = (e)=>{ e.stopPropagation(); openFolderPath(s.plate_path); };
       thumbTd.appendChild(btn);
     }
     tr.appendChild(thumbTd);
@@ -305,11 +319,11 @@ function renderShots(shots) {
     sel.onchange = async ()=>{ try{ await fetch(`/api/shots/${s.id}`, {method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({status: sel.value})}); tr.className=""; } catch(e){ alert("Error update"); } };
     statusTd.appendChild(sel); tr.appendChild(statusTd);
 
-    const movTd=document.createElement("td"); const movBtn=document.createElement("button"); movBtn.textContent = s.mov_path? "📁":"-"; movBtn.disabled = !s.mov_path; movBtn.onclick=(e)=>{ e.stopPropagation(); window.open(s.mov_path); }; movTd.appendChild(movBtn); tr.appendChild(movTd);
+    const movTd=document.createElement("td"); const movBtn=document.createElement("button"); movBtn.textContent = s.mov_path? "📁":"-"; movBtn.disabled = !s.mov_path; movBtn.onclick=(e)=>{ e.stopPropagation(); openFolderPath(s.mov_path); }; movTd.appendChild(movBtn); tr.appendChild(movTd);
 
-    const exrTd=document.createElement("td"); const exrBtn=document.createElement("button"); exrBtn.textContent = s.exr_path? "📁":"-"; exrBtn.disabled = !s.exr_path; exrBtn.onclick=(e)=>{ e.stopPropagation(); window.open(s.exr_path); }; exrTd.appendChild(exrBtn); tr.appendChild(exrTd);
+    const exrTd=document.createElement("td"); const exrBtn=document.createElement("button"); exrBtn.textContent = s.exr_path? "📁":"-"; exrBtn.disabled = !s.exr_path; exrBtn.onclick=(e)=>{ e.stopPropagation(); openFolderPath(s.exr_path); }; exrTd.appendChild(exrBtn); tr.appendChild(exrTd);
 
-    const nukeTd=document.createElement("td"); const nukeBtn=document.createElement("button"); nukeBtn.textContent="Nuke"; nukeBtn.onclick=async()=>{ try{ const d=await fetchJSON(`/api/shots/${s.id}/nuke_path`); if (d.path) window.open(d.path); else alert("Nuke path not configured"); }catch(e){alert("Error");} }; nukeTd.appendChild(nukeBtn); tr.appendChild(nukeTd);
+    const nukeTd=document.createElement("td"); const nukeBtn=document.createElement("button"); nukeBtn.textContent="Nuke"; nukeBtn.onclick=async()=>{ try{ const d=await fetchJSON(`/api/shots/${s.id}/nuke_path`); if (d.path) openFolderPath(d.path); else alert("Nuke path not configured"); }catch(e){alert("Error");} }; nukeTd.appendChild(nukeBtn); tr.appendChild(nukeTd);
 
     const actionsTd=document.createElement("td");
     const genBtn=document.createElement("button"); genBtn.textContent="GenComp"; genBtn.onclick=async(e)=>{ e.stopPropagation(); try{ const res=await fetch(`/api/shots/${s.id}/generate_comp`, {method:"POST"}); const r=await res.json(); if (!res.ok) alert(r.error||"Generate failed"); else alert("Created: "+r.path); loadShots(); }catch(err){alert("Error");} };

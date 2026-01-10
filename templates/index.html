@@ -2054,8 +2054,8 @@
             <div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;">
               <button class="btn-submit" onclick="generateShotStructure()">🗂️ Folder</button>
               <button class="btn-submit" style="background:#FF6B6B;" onclick="startShot()">☢️ Start shot</button>
-              ${shot.plate_path ? `<button class="btn-submit" style="background:#667eea;" onclick="window.open('${shot.plate_path.replace(/'/g, "\\'")}')">📁 Plate</button>` : ''}
-              ${shot.exr_path ? `<button class="btn-submit" style="background:#667eea;" onclick="window.open('${shot.exr_path.replace(/'/g, "\\'")}')">📁 EXR</button>` : ''}
+              ${shot.plate_path ? `<button class="btn-submit" style="background:#667eea;" onclick="openFolder('${shot.plate_path.replace(/'/g, "\\'")}')">📁 Plate</button>` : ''}
+              ${shot.exr_path ? `<button class="btn-submit" style="background:#667eea;" onclick="openFolder('${shot.exr_path.replace(/'/g, "\\'")}')">📁 EXR</button>` : ''}
             </div>
           `;
 
@@ -2657,6 +2657,35 @@
           console.error('Start shot exception:', e);
         }
       }
+
+        // Helper to open local filesystem paths in a cross-platform way
+        function openFolder(path) {
+          if (!path) { alert('Path not provided'); return; }
+          try {
+            let p = String(path);
+            // If already a URL, open directly
+            if (/^https?:\/\//i.test(p) || /^file:\/\//i.test(p)) {
+              window.open(p);
+              return;
+            }
+            // Normalize backslashes to forward slashes
+            p = p.replace(/\\\\/g, '/');
+            // Windows absolute path (e.g., C:/...)
+            if (/^[A-Za-z]:\//.test(p)) {
+              p = 'file:///' + p;
+            } else if (p.startsWith('/')) {
+              p = 'file://' + p;
+            } else {
+              // Relative or other, attempt file:/// prefix
+              p = 'file:///' + p;
+            }
+            window.open(encodeURI(p));
+          } catch (e) {
+            console.error('openFolder error', e);
+            // Fallback
+            window.open(path);
+          }
+        }
 
       function importShots() {
         if (!currentProjectId) {

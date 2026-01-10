@@ -1,8 +1,9 @@
 # Core
-flask==2.3.0
-flask-sqlalchemy==3.0.5
-sqlalchemy==2.0.23
-pymysql==1.1.0
+# Use Flask 3.x for Python 3.14 compatibility
+Flask>=3.0,<4.0
+Flask-SQLAlchemy>=3.0
+SQLAlchemy>=2.0
+PyMySQL>=1.1.0
 
 # Development
 flask-debugtoolbar==0.13.1
